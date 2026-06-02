@@ -1,0 +1,18 @@
+# Build output
+/build
+/out 
+*.user
+
+# Generated shader headers
+*.sc.bin.h
+
+# IDE
+.vs/
+.vscode/
+CMakeSettings.json
+
+# Logs
+*.log
+.deps/
+
+imgui.ini

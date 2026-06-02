@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "MACAD_OCCT_SOURCE": "prebuilt",
+        "OpenCASCADE_DIR": "$env{OpenCASCADE_DIR}",
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/.deps/_deps"
+      }
+    },
+    {
+      "name": "MaCAD",
+      "displayName": "x64 (OCCT prebuilt, Debug+Release)",
+      "inherits": "base"
+    } 
+  ],
+  "buildPresets": [
+    {
+      "name": "x64-debug",
+      "configurePreset": "MaCAD",
+      "configuration": "Debug"
+    },
+    {
+      "name": "x64-release",
+      "configurePreset": "MaCAD",
+      "configuration": "Release"
+    }
+  ]
+}
