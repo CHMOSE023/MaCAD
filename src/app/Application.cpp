@@ -98,6 +98,11 @@ namespace macad::app {
                 m_boxDims[0] = (m_boxDims[0] >= 3.0) ? 1.0 : m_boxDims[0] + 0.5;
                 rebuildBox(m_boxDims[0], m_boxDims[1], m_boxDims[2]);
             }));
+
+        // M2: enter/leave the 2D sketch editor. The SketchView owns its sketch
+        // and drives editing entirely through ImGui overlays + panels.
+        m_registry.registerCommand(std::make_shared<FunctionCommand>(
+            "macad.sketch.toggle", "Sketch", [this] { m_sketchView.toggle(); }));
     }
 
     void Application::rebuildBox(double dx, double dy, double dz) {
@@ -113,11 +118,18 @@ namespace macad::app {
         if (io.WantCaptureMouse) {
             return;
         }
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+        // In sketch mode the left button drives the sketch (draw/drag/select), so
+        // orbit moves to the right button and pan to the middle button; outside
+        // sketch mode the left button orbits as before.
+        const bool sketching = m_sketchView.active();
+        if (!sketching && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+            m_camera.orbit(io.MouseDelta.x, io.MouseDelta.y);
+        }
+        if (sketching && ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
             m_camera.orbit(io.MouseDelta.x, io.MouseDelta.y);
         }
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle) ||
-            ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+            (!sketching && ImGui::IsMouseDragging(ImGuiMouseButton_Right))) {
             m_camera.pan(io.MouseDelta.x, io.MouseDelta.y);
         }
         if (io.MouseWheel != 0.0f) {
@@ -150,8 +162,16 @@ namespace macad::app {
             handleCameraInput();
             ui::Panels::draw(m_registry, m_stats);
 
+            // Sketch overlay needs the camera's view-projection to map the 2D
+            // plane to screen space. The same matrix drives picking/dragging.
+            const glm::mat4 viewProj = m_camera.projMatrix() * m_camera.viewMatrix();
+            m_sketchView.update(viewProj);
+            m_sketchView.drawPanels();
+
             m_renderer.beginFrame(m_camera);
-            m_renderer.drawMesh(m_mesh, glm::mat4(1.0f));
+            if (!m_sketchView.active()) {
+                m_renderer.drawMesh(m_mesh, glm::mat4(1.0f));
+            }
 
             m_imgui.endFrame();
             m_renderer.endFrame();

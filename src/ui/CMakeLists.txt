@@ -1,20 +1,22 @@
 add_library(macad_ui STATIC
     ImGuiLayer.cpp
-    Panels.cpp)
+    Panels.cpp
+    SketchView.cpp)
 
 target_sources(macad_ui PUBLIC
     FILE_SET HEADERS
     BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/..
     FILES
         ImGuiLayer.hpp
-        Panels.hpp)
+        Panels.hpp
+        SketchView.hpp)
 
 target_include_directories(macad_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-# ui uses ImGui (+ our bgfx backend), GLFW, plugin (for command toolbar) and
-# core. It must NOT see OCCT.
+# ui uses ImGui (+ our bgfx backend), GLFW, plugin (for command toolbar), the
+# sketch model (interactive editor) and core. It must NOT see OCCT.
 target_link_libraries(macad_ui
-    PUBLIC  macad::core macad::plugin
+    PUBLIC  macad::core macad::plugin macad::sketch
     PRIVATE imgui imgui_bgfx glfw)
 
 set_target_properties(macad_ui PROPERTIES FOLDER "macad")

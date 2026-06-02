@@ -9,6 +9,7 @@
 #include "render/Renderer.hpp"
 #include "ui/ImGuiLayer.hpp"
 #include "ui/Panels.hpp"
+#include "ui/SketchView.hpp"
 #include "plugin/PluginRegistry.hpp"
 
 struct GLFWwindow;
@@ -35,6 +36,7 @@ namespace macad::app {
         render::Camera m_camera;
         render::Mesh m_mesh;
         ui::ImGuiLayer m_imgui;
+        ui::SketchView m_sketchView;
         ui::FrameStats m_stats;
         PluginRegistry m_registry;
 
