@@ -43,7 +43,11 @@ namespace macad::ui
         ParameterTable&                 params,
         int&                            selectedFeature,
         std::vector<FeatureTransform>&  transforms,
-        std::vector<AsmConstraint>&     constraints)
+        std::vector<AsmConstraint>&     constraints,
+        std::vector<Component>&         components,
+        std::vector<Mate>&              mates,
+        const AssemblyStatus&           asmStatus,
+        int&                            selectedComponent)
     {
         unsigned dirty = kDirtyNone;
 
@@ -246,6 +250,198 @@ namespace macad::ui
             ImGui::Separator();
             if (ImGui::Button("Solve Now") && !constraints.empty())
                 dirty |= kDirtyConstraints;
+        }
+        ImGui::End();
+
+        // ====================================================================
+        // M5 full assembly: component instances + mates
+        // ====================================================================
+        const int nf = static_cast<int>(features.size());
+        const int nc = static_cast<int>(components.size());
+
+        // ---- Components panel ----------------------------------------------
+        if (ImGui::Begin("Components"))
+        {
+            // Build part-name list for the part pickers.
+            std::vector<const char*> partNames;
+            partNames.reserve(features.size());
+            for (const FeatureInfo& fi : features) partNames.push_back(fi.name.c_str());
+
+            if (nf == 0)
+            {
+                ImGui::TextDisabled("Create a feature (extrude/revolve) first;");
+                ImGui::TextDisabled("each feature is a part you can instance here.");
+            }
+            else
+            {
+                static int addPart = 0;
+                addPart = std::clamp(addPart, 0, nf - 1);
+                ImGui::SetNextItemWidth(120.0f);
+                ImGui::Combo("Part##addcomp", &addPart, partNames.data(), nf);
+                ImGui::SameLine();
+                if (ImGui::Button("Add Instance"))
+                {
+                    Component c;
+                    c.part = addPart;
+                    c.grounded = components.empty();   // first instance is the ground
+                    c.name = std::string(partNames[addPart]) + " #" +
+                             std::to_string(components.size() + 1);
+                    components.push_back(std::move(c));
+                    selectedComponent = static_cast<int>(components.size()) - 1;
+                    dirty |= kDirtyAssembly;
+                }
+            }
+
+            ImGui::Separator();
+
+            int toDelete = -1;
+            for (int i = 0; i < nc; ++i)
+            {
+                Component& c = components[i];
+                ImGui::PushID(i);
+
+                if (ImGui::SmallButton("x")) toDelete = i;
+                ImGui::SameLine();
+
+                bool sel = (i == selectedComponent);
+                if (ImGui::Selectable(c.name.c_str(), sel, 0, ImVec2(140, 0)))
+                    selectedComponent = sel ? -1 : i;
+                ImGui::SameLine();
+
+                bool g = c.grounded;
+                if (ImGui::Checkbox("ground##c", &g)) { c.grounded = g; dirty |= kDirtyAssembly; }
+
+                ImGui::PopID();
+            }
+            if (toDelete >= 0)
+            {
+                components.erase(components.begin() + toDelete);
+                // Drop mates that referenced the removed component; reindex the rest.
+                for (int m = static_cast<int>(mates.size()) - 1; m >= 0; --m)
+                {
+                    Mate& mt = mates[m];
+                    if (mt.a == toDelete || mt.b == toDelete) { mates.erase(mates.begin() + m); continue; }
+                    if (mt.a > toDelete) --mt.a;
+                    if (mt.b > toDelete) --mt.b;
+                }
+                if (selectedComponent == toDelete) selectedComponent = -1;
+                else if (selectedComponent > toDelete) --selectedComponent;
+                dirty |= kDirtyAssembly;
+            }
+            if (nc == 0)
+                ImGui::TextDisabled("(no component instances)");
+
+            // ---- Selected component pose editor ----------------------------
+            if (selectedComponent >= 0 && selectedComponent < nc)
+            {
+                Component& c = components[selectedComponent];
+                ImGui::Separator();
+                ImGui::Text("Pose: %s", c.name.c_str());
+                if (c.grounded) ImGui::TextDisabled("(grounded — solver keeps this fixed)");
+
+                auto dragField = [&](const char* lbl, double& v) {
+                    float f = static_cast<float>(v);
+                    ImGui::SetNextItemWidth(70.0f);
+                    if (ImGui::DragFloat(lbl, &f, 0.05f, 0.0f, 0.0f, "%.3f"))
+                    { v = f; dirty |= kDirtyAssembly; }
+                };
+                dragField("tx", c.tx); ImGui::SameLine(); dragField("ty", c.ty); ImGui::SameLine(); dragField("tz", c.tz);
+                dragField("rx", c.rx); ImGui::SameLine(); dragField("ry", c.ry); ImGui::SameLine(); dragField("rz", c.rz);
+            }
+        }
+        ImGui::End();
+
+        // ---- Mates panel ---------------------------------------------------
+        if (ImGui::Begin("Mates"))
+        {
+            // ---- solver status banner --------------------------------------
+            {
+                ImVec4 col = asmStatus.converged ? ImVec4(0.5f, 0.9f, 0.5f, 1.0f)
+                                                 : ImVec4(0.95f, 0.5f, 0.4f, 1.0f);
+                ImGui::TextColored(col, "%s", asmStatus.message.empty()
+                                   ? "(add components & mates)" : asmStatus.message.c_str());
+                ImGui::TextDisabled("iters=%d  residual=%.1e", asmStatus.iterations, asmStatus.residual);
+            }
+            ImGui::Separator();
+
+            const char* mateKinds[] = { "Coincident", "Distance", "Concentric", "Parallel", "Angle" };
+            const char* axisNames[] = { "X", "Y", "Z" };
+
+            // ---- add mate --------------------------------------------------
+            static int  mk = 0, ma = 0, mb = 1, max = 2;
+            static char mval[32] = "0";
+            ImGui::SetNextItemWidth(100.0f);
+            ImGui::Combo("Kind##nm", &mk, mateKinds, 5);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(45.0f);
+            ImGui::InputInt("A##nm", &ma); ma = std::clamp(ma, 0, std::max(0, nc - 1));
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(45.0f);
+            ImGui::InputInt("B##nm", &mb); mb = std::clamp(mb, 0, std::max(0, nc - 1));
+
+            const MateKind mkk = static_cast<MateKind>(mk);
+            if (mateNeedsAxis(mkk)) {
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(50.0f);
+                ImGui::Combo("Axis##nm", &max, axisNames, 3);
+            }
+            if (mateNeedsValue(mkk)) {
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(55.0f);
+                ImGui::InputText("val##nm", mval, sizeof(mval));
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("+##addmate") && nc >= 2)
+            {
+                Mate m;
+                m.kind  = mkk;
+                m.a     = ma;
+                m.b     = mb;
+                m.axis  = static_cast<MateAxis>(max);
+                m.value = mateNeedsValue(mkk) ? mval : "0";
+                m.name  = std::string(mateKinds[mk]) + " " + std::to_string(mates.size() + 1);
+                mates.push_back(std::move(m));
+                dirty |= kDirtyAssembly;
+            }
+            if (nc < 2)
+                ImGui::TextDisabled("Need ≥ 2 components to add mates.");
+
+            ImGui::Separator();
+
+            // ---- existing mates --------------------------------------------
+            int toDelete = -1;
+            for (int i = 0; i < static_cast<int>(mates.size()); ++i)
+            {
+                Mate& m = mates[i];
+                ImGui::PushID(1000 + i);
+
+                if (ImGui::SmallButton("x")) toDelete = i;
+                ImGui::SameLine();
+                ImGui::Text("%s  A%d→B%d", mateKindName(m.kind), m.a, m.b);
+
+                if (mateNeedsAxis(m.kind)) {
+                    ImGui::SameLine();
+                    int ax = mateAxisIndex(m.axis);
+                    ImGui::SetNextItemWidth(45.0f);
+                    if (ImGui::Combo("##max", &ax, axisNames, 3)) { m.axis = static_cast<MateAxis>(ax); dirty |= kDirtyAssembly; }
+                }
+                if (mateNeedsValue(m.kind)) {
+                    ImGui::SameLine();
+                    if (inputString("##mv", m.value, 55.0f)) dirty |= kDirtyAssembly;
+                }
+                ImGui::PopID();
+            }
+            if (toDelete >= 0)
+            {
+                mates.erase(mates.begin() + toDelete);
+                dirty |= kDirtyAssembly;
+            }
+            if (mates.empty())
+                ImGui::TextDisabled("(no mates)");
+
+            ImGui::Separator();
+            if (ImGui::Button("Solve Assembly"))
+                dirty |= kDirtyAssembly;
         }
         ImGui::End();
 

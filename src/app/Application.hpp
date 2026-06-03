@@ -71,7 +71,9 @@ namespace macad::app
         void recompute();
 
         // ---- M5 assembly ------------------------------------------------
-        void solveAssembly();
+        void solveAssembly();        // legacy feature-level positioning
+        void solveMates();           // component instances + mate solver
+        glm::mat4 buildMatrixNumeric(const Component& c) const;
 
         // ---- Members ----------------------------------------------------
         GLFWwindow*      m_window{ nullptr };
@@ -91,6 +93,12 @@ namespace macad::app
         std::vector<Feature>       m_features;
         std::vector<AsmConstraint> m_constraints;
         int                        m_selectedFeature{ -1 };
+
+        // M5 full assembly: instances + mates + solver status.
+        std::vector<Component>     m_components;
+        std::vector<Mate>          m_mates;
+        AssemblyStatus             m_asmStatus;
+        int                        m_selectedComponent{ -1 };
 
         bool m_running{ false };
     };

@@ -249,7 +249,8 @@ namespace macad::app
                 featureInfos, m_params,
                 m_selectedFeature,
                 transformMirrors,
-                m_constraints);
+                m_constraints,
+                m_components, m_mates, m_asmStatus, m_selectedComponent);
 
             // Write back edited transforms.
             for (int i = 0; i < static_cast<int>(m_features.size()); ++i)
@@ -262,6 +263,8 @@ namespace macad::app
             }
             if (dirty & (ui::kDirtyConstraints | ui::kDirtyTransforms))
                 solveAssembly();
+            if (dirty & (ui::kDirtyAssembly | ui::kDirtyParams))
+                solveMates();
 
             // Sketch overlay needs the camera's view-projection to map the 2D
             // plane to screen space. The same matrix drives picking/dragging.
@@ -273,15 +276,31 @@ namespace macad::app
 
             if (!m_sketchView.active())
             {
-                // Draw the demo box only when no extruded features exist yet.
-                if (m_features.empty())
+                if (!m_components.empty())
                 {
-                    m_renderer.drawMesh(m_mesh, glm::mat4(1.0f));
+                    // Assembly mode: draw each placed instance with its solved
+                    // world matrix, reusing the referenced part's mesh.
+                    for (const Component& c : m_components)
+                    {
+                        if (c.part < 0 || c.part >= static_cast<int>(m_features.size()))
+                            continue;
+                        const auto& mesh = m_features[c.part].mesh;
+                        if (mesh && mesh->valid())
+                            m_renderer.drawMesh(*mesh, c.world);
+                    }
                 }
-                for (const Feature& f : m_features)
+                else
                 {
-                    if (f.mesh && f.mesh->valid())
-                        m_renderer.drawMesh(*f.mesh, f.worldMatrix);
+                    // Draw the demo box only when no extruded features exist yet.
+                    if (m_features.empty())
+                    {
+                        m_renderer.drawMesh(m_mesh, glm::mat4(1.0f));
+                    }
+                    for (const Feature& f : m_features)
+                    {
+                        if (f.mesh && f.mesh->valid())
+                            m_renderer.drawMesh(*f.mesh, f.worldMatrix);
+                    }
                 }
             }
 
@@ -483,6 +502,131 @@ namespace macad::app
 
             updateTransform(B);
         }
+    }
+
+    // ---- M5: component instances + iterative mate solver -------------------
+
+    glm::mat4 Application::buildMatrixNumeric(const Component& c) const
+    {
+        glm::mat4 T  = glm::translate(glm::mat4(1.0f),
+                          glm::vec3((float)c.tx, (float)c.ty, (float)c.tz));
+        glm::mat4 Rx = glm::rotate(glm::mat4(1.0f), glm::radians((float)c.rx), glm::vec3(1,0,0));
+        glm::mat4 Ry = glm::rotate(glm::mat4(1.0f), glm::radians((float)c.ry), glm::vec3(0,1,0));
+        glm::mat4 Rz = glm::rotate(glm::mat4(1.0f), glm::radians((float)c.rz), glm::vec3(0,0,1));
+        return T * Rz * Ry * Rx;   // TRS, matching buildMatrix()
+    }
+
+    void Application::solveMates()
+    {
+        const int n = static_cast<int>(m_components.size());
+        if (n == 0) { m_asmStatus = {}; return; }
+
+        // If nothing is grounded, implicitly anchor component 0 so the assembly
+        // has a fixed frame instead of drifting.
+        bool anyGround = false;
+        for (const Component& c : m_components) anyGround |= c.grounded;
+        auto grounded = [&](int i) { return m_components[i].grounded || (!anyGround && i == 0); };
+
+        auto resolveVal = [&](const std::string& s) { double v = 0.0; m_params.resolve(s, v); return v; };
+        auto validPair  = [&](const Mate& m) {
+            return m.a >= 0 && m.b >= 0 && m.a < n && m.b < n && m.a != m.b;
+        };
+        auto rot = [](Component& c, int k) -> double& { return k == 0 ? c.rx : k == 1 ? c.ry : c.rz; };
+        auto tr  = [](Component& c, int k) -> double& { return k == 0 ? c.tx : k == 1 ? c.ty : c.tz; };
+
+        // ---- Orientation pass (deterministic, in mate order) ----------------
+        // Parallel/Concentric copy A's rotation to B; Angle adds an offset about
+        // one axis. Drive the non-grounded side (B preferred, else A).
+        for (const Mate& m : m_mates) {
+            if (!validPair(m)) continue;
+            Component& A = m_components[m.a];
+            Component& B = m_components[m.b];
+            if (m.kind == MateKind::Parallel || m.kind == MateKind::Concentric) {
+                if      (!grounded(m.b)) { B.rx = A.rx; B.ry = A.ry; B.rz = A.rz; }
+                else if (!grounded(m.a)) { A.rx = B.rx; A.ry = B.ry; A.rz = B.rz; }
+            } else if (m.kind == MateKind::Angle) {
+                const double ang = resolveVal(m.value);
+                const int    k   = mateAxisIndex(m.axis);
+                if      (!grounded(m.b)) { B.rx = A.rx; B.ry = A.ry; B.rz = A.rz; rot(B, k) += ang; }
+                else if (!grounded(m.a)) { A.rx = B.rx; A.ry = B.ry; A.rz = B.rz; rot(A, k) -= ang; }
+            }
+        }
+
+        // Translational constraints a mate imposes: list of (axis, offset) with
+        // the invariant  B.axis - A.axis == offset.
+        auto transConstraints = [&](const Mate& m, int (&axes)[3], double (&offs)[3]) -> int {
+            switch (m.kind) {
+            case MateKind::Coincident:
+                axes[0]=0; axes[1]=1; axes[2]=2; offs[0]=offs[1]=offs[2]=0.0; return 3;
+            case MateKind::Distance: {
+                axes[0]=mateAxisIndex(m.axis); offs[0]=resolveVal(m.value); return 1;
+            }
+            case MateKind::Concentric: {
+                const int ax = mateAxisIndex(m.axis); int j = 0;
+                for (int k = 0; k < 3; ++k) if (k != ax) { axes[j]=k; offs[j]=0.0; ++j; }
+                return 2;  // the two axes perpendicular to the shared axis
+            }
+            default: return 0; // Parallel / Angle: orientation only
+            }
+        };
+
+        // ---- Translation pass (Gauss-Seidel relaxation) ---------------------
+        const int    maxIter = 200;
+        const double tol     = 1e-7;
+        double residual = 0.0;
+        int    iter = 0;
+        for (; iter < maxIter; ++iter) {
+            residual = 0.0;
+            for (const Mate& m : m_mates) {
+                if (!validPair(m)) continue;
+                Component& A = m_components[m.a];
+                Component& B = m_components[m.b];
+                const bool ga = grounded(m.a), gb = grounded(m.b);
+                int axes[3]; double offs[3];
+                const int cnt = transConstraints(m, axes, offs);
+                for (int q = 0; q < cnt; ++q) {
+                    const int    k   = axes[q];
+                    const double err = (tr(B, k) - tr(A, k)) - offs[q];
+                    residual = std::max(residual, std::abs(err));
+                    if      (!gb) tr(B, k) -= err;   // B.k := A.k + off
+                    else if (!ga) tr(A, k) += err;   // A.k := B.k - off
+                    // both grounded: conflict, leave as-is (shows up as residual)
+                }
+            }
+            if (residual < tol) { ++iter; break; }
+        }
+
+        // ---- Status / DOF heuristic ----------------------------------------
+        int freeComponents = 0;
+        for (int i = 0; i < n; ++i) if (!grounded(i)) ++freeComponents;
+        int lockedTrans = 0;
+        for (const Mate& m : m_mates) {
+            if (!validPair(m)) continue;
+            int axes[3]; double offs[3];
+            lockedTrans += transConstraints(m, axes, offs);
+        }
+        const int availTrans = 3 * freeComponents;
+        const int remaining  = availTrans - lockedTrans;
+
+        m_asmStatus.converged  = (residual < tol);
+        m_asmStatus.iterations = iter;
+        m_asmStatus.residual   = residual;
+        m_asmStatus.transDof   = remaining;
+        if (!m_asmStatus.converged)
+            m_asmStatus.message = "Conflicting / over-constrained (did not converge)";
+        else if (remaining > 0)
+            m_asmStatus.message = "Under-constrained: " + std::to_string(remaining) + " translational DOF free";
+        else if (remaining == 0)
+            m_asmStatus.message = "Fully constrained";
+        else
+            m_asmStatus.message = "Over-constrained (redundant mates), but consistent";
+
+        // ---- Bake world matrices -------------------------------------------
+        for (Component& c : m_components)
+            c.world = buildMatrixNumeric(c);
+
+        MACAD_LOG_INFO("Assembly solved: {} comps, {} mates, iters={}, residual={:.2e} — {}",
+                       n, m_mates.size(), iter, residual, m_asmStatus.message);
     }
 
     void Application::shutdown() {

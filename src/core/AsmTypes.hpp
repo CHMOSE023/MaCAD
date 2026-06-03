@@ -5,6 +5,8 @@
 
 #include <string>
 
+#include <glm/glm.hpp>
+
 namespace macad {
 
     // Per-feature transform. Each field is a literal ("1.5") or a parameter
@@ -45,6 +47,86 @@ namespace macad {
         int                 featureA{ -1 };   // driver
         int                 featureB{ -1 };   // driven
         std::string         value{ "0" };     // for *Distance constraints
+    };
+
+    // ========================================================================
+    // M5 — full assembly: component instances + mates + iterative solver
+    // ========================================================================
+
+    // A placed instance of a part. The geometry comes from a feature (m_features
+    // in the app); the same part may be instanced many times, each with its own
+    // pose. The solver works directly on the numeric pose fields below.
+    struct Component {
+        std::string name;
+        int         part{ -1 };         // index into features[] supplying geometry
+        bool        grounded{ false };  // anchored: the solver never moves it
+
+        // Pose (solver state). Rotation is degrees, Euler XYZ; matches buildMatrix.
+        double tx{ 0 }, ty{ 0 }, tz{ 0 };
+        double rx{ 0 }, ry{ 0 }, rz{ 0 };
+
+        glm::mat4 world{ 1.0f };        // computed by the app after each solve
+    };
+
+    enum class MateAxis { X, Y, Z };
+
+    inline const char* mateAxisName(MateAxis a) {
+        switch (a) {
+        case MateAxis::X: return "X";
+        case MateAxis::Y: return "Y";
+        case MateAxis::Z: return "Z";
+        }
+        return "?";
+    }
+
+    inline int mateAxisIndex(MateAxis a) {
+        return a == MateAxis::X ? 0 : a == MateAxis::Y ? 1 : 2;
+    }
+
+    // A relationship between two components. `b` is the driven side; `a` is the
+    // reference. When `b` is grounded but `a` is not, the solver drives `a`.
+    enum class MateKind {
+        Coincident,  // B.origin == A.origin                 (locks 3 translations)
+        Distance,    // B.axis == A.axis + value             (locks 1 translation)
+        Concentric,  // share A's axis line + parallel axes  (locks 2 trans + orientation)
+        Parallel,    // B.orientation == A.orientation       (orientation only)
+        Angle,       // B.orientation == A.orientation + value(deg) about axis
+    };
+
+    inline const char* mateKindName(MateKind k) {
+        switch (k) {
+        case MateKind::Coincident: return "Coincident";
+        case MateKind::Distance:   return "Distance";
+        case MateKind::Concentric: return "Concentric";
+        case MateKind::Parallel:   return "Parallel";
+        case MateKind::Angle:      return "Angle";
+        }
+        return "Unknown";
+    }
+
+    inline bool mateNeedsAxis(MateKind k) {
+        return k == MateKind::Distance || k == MateKind::Concentric || k == MateKind::Angle;
+    }
+    inline bool mateNeedsValue(MateKind k) {
+        return k == MateKind::Distance || k == MateKind::Angle;
+    }
+
+    struct Mate {
+        std::string name;
+        MateKind    kind{ MateKind::Coincident };
+        int         a{ -1 };               // reference component
+        int         b{ -1 };               // driven component
+        MateAxis    axis{ MateAxis::Z };   // for Distance / Concentric / Angle
+        std::string value{ "0" };          // distance or angle(deg); param-resolvable
+    };
+
+    // Result of the iterative mate solver, surfaced in the UI.
+    struct AssemblyStatus {
+        bool        converged{ true };
+        int         iterations{ 0 };
+        double      residual{ 0.0 };
+        int         transDof{ 0 };     // remaining translational DOF estimate
+        std::string message;           // human-readable summary
     };
 
 } // namespace macad

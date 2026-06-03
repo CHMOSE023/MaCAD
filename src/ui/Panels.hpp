@@ -36,6 +36,7 @@ namespace macad::ui
         kDirtyParams      = 1 << 0,   // parameter value edited → recompute
         kDirtyTransforms  = 1 << 1,   // feature transform edited → updateTransform + solve
         kDirtyConstraints = 1 << 2,   // constraint added/removed/edited → solve
+        kDirtyAssembly    = 1 << 3,   // component/mate edited → solveMates
     };
 
     class Panels
@@ -54,7 +55,12 @@ namespace macad::ui
             ParameterTable&                  params,
             int&                             selectedFeature,
             std::vector<FeatureTransform>&   transforms,
-            std::vector<AsmConstraint>&      constraints);
+            std::vector<AsmConstraint>&      constraints,
+            // M5 full assembly (in/out).
+            std::vector<Component>&          components,
+            std::vector<Mate>&               mates,
+            const AssemblyStatus&            asmStatus,
+            int&                             selectedComponent);
     };
 
 } // namespace macad::ui
