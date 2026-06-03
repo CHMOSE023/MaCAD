@@ -16,10 +16,13 @@
 #include <imgui.h>
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <numbers>
 
 namespace macad::app
 { 
@@ -227,18 +230,38 @@ namespace macad::app
                 }
             }
 
-            // Build lightweight feature info list for the feature tree UI.
-            std::vector<ui::FeatureInfo> featureInfos;
+            // Build lightweight feature info + transform mirrors for the UI.
+            std::vector<ui::FeatureInfo>     featureInfos;
+            std::vector<FeatureTransform>    transformMirrors;
             featureInfos.reserve(m_features.size());
-            for (const Feature& f : m_features) 
-            
+            transformMirrors.reserve(m_features.size());
+            for (const Feature& f : m_features)
             {
                 ui::FeatureInfo fi;
                 fi.name          = f.name;
                 fi.triangleCount = f.mesh ? f.mesh->indexCount() / 3 : 0;
                 featureInfos.push_back(fi);
+                transformMirrors.push_back(f.xform);
             }
-            ui::Panels::draw(m_registry, m_history, m_stats, featureInfos);
+
+            const unsigned dirty = ui::Panels::draw(
+                m_registry, m_history, m_stats,
+                featureInfos, m_params,
+                m_selectedFeature,
+                transformMirrors,
+                m_constraints);
+
+            // Write back edited transforms.
+            for (int i = 0; i < static_cast<int>(m_features.size()); ++i)
+                m_features[i].xform = transformMirrors[i];
+
+            if (dirty & ui::kDirtyParams)
+                recompute();
+            if (dirty & ui::kDirtyTransforms) {
+                for (Feature& f : m_features) updateTransform(f);
+            }
+            if (dirty & (ui::kDirtyConstraints | ui::kDirtyTransforms))
+                solveAssembly();
 
             // Sketch overlay needs the camera's view-projection to map the 2D
             // plane to screen space. The same matrix drives picking/dragging.
@@ -257,9 +280,8 @@ namespace macad::app
                 }
                 for (const Feature& f : m_features)
                 {
-                    if (f.mesh && f.mesh->valid()) {
-                        m_renderer.drawMesh(*f.mesh, glm::mat4(1.0f));
-                    }
+                    if (f.mesh && f.mesh->valid())
+                        m_renderer.drawMesh(*f.mesh, f.worldMatrix);
                 }
             }
 
@@ -270,92 +292,204 @@ namespace macad::app
 
     void Application::onExtrude()
     {
-        const sketch::Sketch&      sk     = m_sketchView.sketch();
-        const sketch::SketchPlane& plane  = sk.plane();
-        const double               height = m_sketchView.pendingExtrudeHeight();
-
-        MACAD_LOG_INFO("Extruding sketch (height={:.3f}) ...", height);
-
-        const geometry::Shape face = geometry::SketchToShape::buildFace(sk);
-        if (face.isNull()) 
+        const std::string& paramExpr = m_sketchView.pendingExtrudeParam();
+        double height = 1.0;
+        if (!m_params.resolve(paramExpr, height))
         {
-            MACAD_LOG_WARN("Extrude: sketch has no closed profile — draw a closed polygon or a circle first");
-            return;
-        }
-
-        const geometry::Shape solid = geometry::SketchToShape::extrude(face, plane, height);
-        if (solid.isNull()) {
-            MACAD_LOG_ERROR("Extrude: solid creation failed");
-            return;
-        }
-
-        const MeshData data = geometry::Tessellator::Tessellate(solid, 0.05);
-        if (data.vertexCount() == 0) {
-            MACAD_LOG_ERROR("Extrude: tessellation produced an empty mesh");
+            MACAD_LOG_WARN("Extrude: cannot resolve '{}' — not a number or known parameter",
+                           paramExpr);
             return;
         }
 
         Feature f;
-        f.name = "Extrude " + std::to_string(m_features.size() + 1);
-        f.mesh = std::make_unique<render::Mesh>();
-        f.mesh->upload(data);
+        f.kind        = FeatureKind::Extrude;
+        f.sketchSnap  = m_sketchView.sketch();        // snapshot
+        f.param       = paramExpr;
+        f.name        = "Extrude " + std::to_string(m_features.size() + 1);
+        f.mesh        = std::make_unique<render::Mesh>();
+
+        if (!rebuildFeature(f))
+            return;
+
         m_features.push_back(std::move(f));
-
-        // Update stats to reflect the newly added solid.
-        m_stats.vertexCount   = static_cast<std::uint32_t>(data.vertexCount());
-        m_stats.triangleCount = static_cast<std::uint32_t>(data.triangleCount());
-
-        MACAD_LOG_INFO("Extrude done: {} verts, {} tris",
-                       data.vertexCount(), data.triangleCount());
+        MACAD_LOG_INFO("Extrude done (param='{}', value={:.3f})", paramExpr, height);
     }
 
     void Application::onRevolve()
     {
-        const sketch::Sketch&      sk      = m_sketchView.sketch();
-        const sketch::SketchPlane& plane   = sk.plane();
-        const double               angle   = m_sketchView.pendingRevolveAngle();
-        const bool                 aroundV = m_sketchView.pendingRevolveAroundV();
-
-        MACAD_LOG_INFO("Revolving sketch (angle={:.1f}°, axis={}) ...",
-                       angle, aroundV ? "V" : "U");
-
-        const geometry::Shape face = geometry::SketchToShape::buildFace(sk);
-        if (face.isNull())
+        const std::string& paramExpr = m_sketchView.pendingRevolveParam();
+        double angle = 360.0;
+        if (!m_params.resolve(paramExpr, angle))
         {
-            MACAD_LOG_WARN("Revolve: sketch has no closed profile — draw a closed "
-                           "polygon or a circle first");
+            MACAD_LOG_WARN("Revolve: cannot resolve '{}' — not a number or known parameter",
+                           paramExpr);
             return;
         }
 
-        const geometry::Shape solid = geometry::SketchToShape::revolve(face, plane, aroundV, angle);
+        Feature f;
+        f.kind          = FeatureKind::Revolve;
+        f.sketchSnap    = m_sketchView.sketch();
+        f.param         = paramExpr;
+        f.revolveAroundV = m_sketchView.pendingRevolveAroundV();
+        f.name          = "Revolve " + std::to_string(m_features.size() + 1);
+        f.mesh          = std::make_unique<render::Mesh>();
+
+        if (!rebuildFeature(f))
+            return;
+
+        m_features.push_back(std::move(f));
+        MACAD_LOG_INFO("Revolve done (param='{}', value={:.1f}°)", paramExpr, angle);
+    }
+
+    bool Application::rebuildFeature(Feature& f)
+    {
+        double paramVal = 1.0;
+        if (!m_params.resolve(f.param, paramVal))
+        {
+            MACAD_LOG_WARN("rebuildFeature '{}': cannot resolve param '{}'",
+                           f.name, f.param);
+            return false;
+        }
+
+        const sketch::SketchPlane& plane = f.sketchSnap.plane();
+        const geometry::Shape face = geometry::SketchToShape::buildFace(f.sketchSnap);
+        if (face.isNull())
+        {
+            MACAD_LOG_WARN("rebuildFeature '{}': no closed profile in stored sketch",
+                           f.name);
+            return false;
+        }
+
+        geometry::Shape solid;
+        if (f.kind == FeatureKind::Extrude)
+            solid = geometry::SketchToShape::extrude(face, plane, paramVal);
+        else
+            solid = geometry::SketchToShape::revolve(face, plane, f.revolveAroundV, paramVal);
+
         if (solid.isNull())
         {
-            MACAD_LOG_ERROR("Revolve: solid creation failed");
-            return;
+            MACAD_LOG_ERROR("rebuildFeature '{}': geometry failed", f.name);
+            return false;
         }
 
         const MeshData data = geometry::Tessellator::Tessellate(solid, 0.05);
         if (data.vertexCount() == 0)
         {
-            MACAD_LOG_ERROR("Revolve: tessellation produced an empty mesh");
-            return;
+            MACAD_LOG_ERROR("rebuildFeature '{}': empty tessellation", f.name);
+            return false;
         }
 
-        Feature f;
-        f.name = "Revolve " + std::to_string(m_features.size() + 1);
-        f.mesh = std::make_unique<render::Mesh>();
+        if (!f.mesh) f.mesh = std::make_unique<render::Mesh>();
         f.mesh->upload(data);
-        m_features.push_back(std::move(f));
+
+        // Store local-space AABB for the assembly solver.
+        auto [mn, mx] = data.computeAABB();
+        f.aabbMin = mn;
+        f.aabbMax = mx;
+
+        // Rebuild world matrix from (possibly updated) transform.
+        updateTransform(f);
 
         m_stats.vertexCount   = static_cast<std::uint32_t>(data.vertexCount());
         m_stats.triangleCount = static_cast<std::uint32_t>(data.triangleCount());
+        return true;
+    }
 
-        MACAD_LOG_INFO("Revolve done: {} verts, {} tris",
-                       data.vertexCount(), data.triangleCount());
+    void Application::recompute()
+    {
+        MACAD_LOG_INFO("Recomputing {} feature(s)...", m_features.size());
+        for (Feature& f : m_features)
+            rebuildFeature(f);
+        solveAssembly();
+    }
+
+    // ---- M5: transforms and assembly solver --------------------------------
+
+    glm::mat4 Application::buildMatrix(const FeatureTransform& xf) const
+    {
+        auto res = [&](const std::string& s, double def) {
+            double v = def;
+            m_params.resolve(s, v);
+            return static_cast<float>(v);
+        };
+
+        const float tx = res(xf.tx, 0.0), ty = res(xf.ty, 0.0), tz = res(xf.tz, 0.0);
+        const float rx = res(xf.rx, 0.0), ry = res(xf.ry, 0.0), rz = res(xf.rz, 0.0);
+
+        glm::mat4 T  = glm::translate(glm::mat4(1.0f), glm::vec3(tx, ty, tz));
+        glm::mat4 Rx = glm::rotate(glm::mat4(1.0f), glm::radians(rx), glm::vec3(1,0,0));
+        glm::mat4 Ry = glm::rotate(glm::mat4(1.0f), glm::radians(ry), glm::vec3(0,1,0));
+        glm::mat4 Rz = glm::rotate(glm::mat4(1.0f), glm::radians(rz), glm::vec3(0,0,1));
+        return T * Rz * Ry * Rx;   // TRS order
+    }
+
+    void Application::updateTransform(Feature& f)
+    {
+        f.worldMatrix = buildMatrix(f.xform);
+    }
+
+    void Application::solveAssembly()
+    {
+        // One forward-pass iteration (enough for non-cyclic constraint graphs).
+        for (const AsmConstraint& c : m_constraints)
+        {
+            const int ai = c.featureA, bi = c.featureB;
+            if (ai < 0 || bi < 0 ||
+                ai >= static_cast<int>(m_features.size()) ||
+                bi >= static_cast<int>(m_features.size()))
+                continue;
+
+            Feature& A = m_features[ai];
+            Feature& B = m_features[bi];
+
+            // Helper: resolve a FeatureTransform field as a double.
+            auto res = [&](const std::string& s, double def = 0.0) {
+                double v = def;
+                m_params.resolve(s, v);
+                return v;
+            };
+
+            double val = 0.0;
+            m_params.resolve(c.value, val);
+
+            switch (c.kind)
+            {
+            case AsmConstraintKind::ZStack: {
+                // B.tz = A.tz + A.local_height (AABB extent in Z)
+                const double atz    = res(A.xform.tz);
+                const double height = static_cast<double>(A.aabbMax.z - A.aabbMin.z);
+                B.xform.tz = std::to_string(atz + height);
+                break;
+            }
+            case AsmConstraintKind::XDistance:
+                B.xform.tx = std::to_string(res(A.xform.tx) + val);
+                break;
+            case AsmConstraintKind::YDistance:
+                B.xform.ty = std::to_string(res(A.xform.ty) + val);
+                break;
+            case AsmConstraintKind::ZDistance:
+                B.xform.tz = std::to_string(res(A.xform.tz) + val);
+                break;
+            case AsmConstraintKind::AlignX:
+                B.xform.tx = A.xform.tx;
+                break;
+            case AsmConstraintKind::AlignY:
+                B.xform.ty = A.xform.ty;
+                break;
+            case AsmConstraintKind::AlignZ:
+                B.xform.tz = A.xform.tz;
+                break;
+            }
+
+            updateTransform(B);
+        }
     }
 
     void Application::shutdown() {
         if (m_window) {
+            // Unload plugins first: dynamic plugin commands point into DLL code
+            // that must stay mapped until those commands are destroyed.
+            m_registry.unloadAll();
             m_imgui.shutdown();
             m_mesh.destroy();
             for (Feature& f : m_features) {

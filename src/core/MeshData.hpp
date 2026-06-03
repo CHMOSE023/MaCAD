@@ -6,6 +6,7 @@
 // types out of render/ui entirely.
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "core/Types.hpp"
@@ -25,6 +26,20 @@ namespace macad {
             positions.clear();
             normals.clear();
             indices.clear();
+        }
+
+        // Axis-aligned bounding box in local (pre-transform) space.
+        // Returns (min, max); both are {0,0,0} for an empty mesh.
+        std::pair<vec3, vec3> computeAABB() const {
+            if (positions.empty())
+                return { vec3(0.0f), vec3(0.0f) };
+            constexpr float kInf = std::numeric_limits<float>::max();
+            vec3 mn( kInf), mx(-kInf);
+            for (const vec3& p : positions) {
+                mn = glm::min(mn, p);
+                mx = glm::max(mx, p);
+            }
+            return { mn, mx };
         }
     };
 

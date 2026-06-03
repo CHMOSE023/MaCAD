@@ -1,5 +1,6 @@
 add_library(macad_core STATIC
-    Log.cpp)
+    Log.cpp
+    ParameterTable.cpp)
 
 target_sources(macad_core PUBLIC
     FILE_SET HEADERS
@@ -9,7 +10,9 @@ target_sources(macad_core PUBLIC
         Types.hpp
         MeshData.hpp
         Parameter.hpp
-        Document.hpp)
+        Document.hpp
+        ParameterTable.hpp
+        AsmTypes.hpp)
 
 target_include_directories(macad_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(macad_core PUBLIC glm::glm spdlog::spdlog)

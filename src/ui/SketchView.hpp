@@ -35,14 +35,15 @@ namespace macad::ui
 
         // Pending extrude request: set when the user clicks "Extrude" in the
         // panel. The application consumes this each frame via takePendingExtrude().
-        bool   hasPendingExtrude()    const { return m_pendingExtrude; }
-        double pendingExtrudeHeight() const { return m_extrudeHeight; }
-        void   clearPendingExtrude()        { m_pendingExtrude = false; }
+        bool               hasPendingExtrude()    const { return m_pendingExtrude; }
+        // The extrude param is a literal ("2.5") or a parameter name ("height").
+        const std::string& pendingExtrudeParam()  const { return m_extrudeParam; }
+        void               clearPendingExtrude()        { m_pendingExtrude = false; }
 
-        bool   hasPendingRevolve()    const { return m_pendingRevolve; }
-        double pendingRevolveAngle()  const { return m_revolveAngle; }
-        bool   pendingRevolveAroundV() const { return m_revolveAroundV; }
-        void   clearPendingRevolve()        { m_pendingRevolve = false; }
+        bool               hasPendingRevolve()    const { return m_pendingRevolve; }
+        const std::string& pendingRevolveParam()  const { return m_revolveParam; }
+        bool               pendingRevolveAroundV() const { return m_revolveAroundV; }
+        void               clearPendingRevolve()        { m_pendingRevolve = false; }
 
         // Per-frame input + overlay rendering. `viewProj` is proj * view from the
         // camera; mouse position and viewport are read from ImGui IO.
@@ -96,13 +97,13 @@ namespace macad::ui
         bool m_cursorValid{ false };
 
         // Extrude request pending consumption by the application.
-        bool   m_pendingExtrude{ false };
-        double m_extrudeHeight{ 1.0 };
+        bool        m_pendingExtrude{ false };
+        std::string m_extrudeParam{ "1.0" };   // literal or parameter name
 
         // Revolve request pending consumption by the application.
-        bool   m_pendingRevolve{ false };
-        double m_revolveAngle{ 360.0 };
-        bool   m_revolveAroundV{ true };  // true = sketch V(Y) axis, false = U(X) axis
+        bool        m_pendingRevolve{ false };
+        std::string m_revolveParam{ "360.0" };  // literal or parameter name
+        bool        m_revolveAroundV{ true };
     };
 
 }  

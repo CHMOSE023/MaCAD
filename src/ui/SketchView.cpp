@@ -514,26 +514,35 @@ namespace macad::ui {
             ImGui::Separator();
 
             // ---- Extrude ------------------------------------------------
-            ImGui::SetNextItemWidth(70.0f);
-            ImGui::InputDouble("Height##extrude", &m_extrudeHeight, 0.0, 0.0, "%.2f");
-            ImGui::SameLine();
-            if (ImGui::Button("Extrude")) {
-                m_pendingExtrude = true;
-                end();
+            {
+                static char extrudeBuf[64];
+                std::strncpy(extrudeBuf, m_extrudeParam.c_str(), sizeof(extrudeBuf) - 1);
+                extrudeBuf[sizeof(extrudeBuf) - 1] = '\0';
+                ImGui::SetNextItemWidth(80.0f);
+                if (ImGui::InputText("H##extrude", extrudeBuf, sizeof(extrudeBuf)))
+                    m_extrudeParam = extrudeBuf;
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Height: literal (\"2.5\") or parameter name (\"height\")");
+                ImGui::SameLine();
+                if (ImGui::Button("Extrude")) { m_pendingExtrude = true; end(); }
             }
 
             // ---- Revolve ------------------------------------------------
-            ImGui::SetNextItemWidth(70.0f);
-            ImGui::InputDouble("Angle##revolve", &m_revolveAngle, 0.0, 0.0, "%.1f");
-            ImGui::SameLine();
-            // Axis selector: U = sketch X axis, V = sketch Y axis
-            if (ImGui::RadioButton("U##ax", !m_revolveAroundV)) m_revolveAroundV = false;
-            ImGui::SameLine();
-            if (ImGui::RadioButton("V##ax",  m_revolveAroundV)) m_revolveAroundV = true;
-            ImGui::SameLine();
-            if (ImGui::Button("Revolve")) {
-                m_pendingRevolve = true;
-                end();
+            {
+                static char revolveBuf[64];
+                std::strncpy(revolveBuf, m_revolveParam.c_str(), sizeof(revolveBuf) - 1);
+                revolveBuf[sizeof(revolveBuf) - 1] = '\0';
+                ImGui::SetNextItemWidth(80.0f);
+                if (ImGui::InputText("A##revolve", revolveBuf, sizeof(revolveBuf)))
+                    m_revolveParam = revolveBuf;
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Angle °: literal (\"360\") or parameter name (\"angle\")");
+                ImGui::SameLine();
+                if (ImGui::RadioButton("U##ax", !m_revolveAroundV)) m_revolveAroundV = false;
+                ImGui::SameLine();
+                if (ImGui::RadioButton("V##ax",  m_revolveAroundV)) m_revolveAroundV = true;
+                ImGui::SameLine();
+                if (ImGui::Button("Revolve")) { m_pendingRevolve = true; end(); }
             }
 
             ImGui::Separator();

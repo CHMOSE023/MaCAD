@@ -1,5 +1,4 @@
-# Header-mostly plugin interface layer. Dynamic loading is reserved for M6;
-# Milestone 1 only ships the interfaces and a static registry.
+# Plugin interface layer + static registry + dynamic library loader (M6).
 add_library(macad_plugin STATIC
     PluginRegistry.cpp
     CommandStack.cpp)
@@ -11,9 +10,14 @@ target_sources(macad_plugin PUBLIC
         IPlugin.hpp
         ICommand.hpp
         PluginRegistry.hpp
-        CommandStack.hpp)
+        CommandStack.hpp
+        PluginApi.hpp)
 
 target_include_directories(macad_plugin PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(macad_plugin PUBLIC macad::core)
+# dlopen/dlsym live in libdl on Linux.
+if(UNIX AND NOT APPLE)
+    target_link_libraries(macad_plugin PUBLIC dl)
+endif()
 set_target_properties(macad_plugin PROPERTIES FOLDER "macad")
 add_library(macad::plugin ALIAS macad_plugin)

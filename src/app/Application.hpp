@@ -1,9 +1,5 @@
 #pragma once
 
-// Top-level application: owns the window, the renderer, the UI layer, the
-// plugin registry, and the demo geometry. Orchestrates init -> main loop ->
-// shutdown. This is the only place all module layers meet.
-
 #include "render/Camera.hpp"
 #include "render/Mesh.hpp"
 #include "render/Renderer.hpp"
@@ -12,6 +8,9 @@
 #include "ui/SketchView.hpp"
 #include "plugin/PluginRegistry.hpp"
 #include "plugin/CommandStack.hpp"
+#include "core/ParameterTable.hpp"
+#include "core/AsmTypes.hpp"
+#include "sketch/Sketch.hpp"
 
 #include <memory>
 #include <string>
@@ -21,7 +20,7 @@ struct GLFWwindow;
 
 namespace macad::app
 {
-    class Application 
+    class Application
     {
     public:
         Application() = default;
@@ -32,20 +31,49 @@ namespace macad::app
         void shutdown();
 
     private:
+        // ---- Command registration / init helpers -------------------------
         void registerBuiltinCommands();
         void rebuildBox(double dx, double dy, double dz);
         void handleCameraInput();
         void syncFramebufferSize();
-        void onExtrude();      // called when SketchView has a pending extrude
-        void onRevolve();      // called when SketchView has a pending revolve
+        void onExtrude();
+        void onRevolve();
 
-        // A built solid feature: name + GPU mesh.
-        struct Feature 
+        // ---- Feature model -----------------------------------------------
+        enum class FeatureKind { Extrude, Revolve };
+
+        struct Feature
         {
-            std::string                  name;
+            std::string                   name;
             std::unique_ptr<render::Mesh> mesh;
+
+            // Rebuild recipe (M3/M4).
+            FeatureKind        kind{ FeatureKind::Extrude };
+            sketch::Sketch     sketchSnap;
+            std::string        param{ "1.0" };
+            bool               revolveAroundV{ false };
+
+            // World transform (M5).
+            FeatureTransform   xform;
+            glm::mat4          worldMatrix{ 1.0f };
+
+            // Local-space AABB (computed after tessellation, used by solver).
+            glm::vec3          aabbMin{ 0.0f };
+            glm::vec3          aabbMax{ 0.0f };
         };
 
+        // ---- Geometry helpers -------------------------------------------
+        bool rebuildFeature(Feature& f);
+        void updateTransform(Feature& f);
+        glm::mat4 buildMatrix(const FeatureTransform& xf) const;
+
+        // ---- M4 recompute -----------------------------------------------
+        void recompute();
+
+        // ---- M5 assembly ------------------------------------------------
+        void solveAssembly();
+
+        // ---- Members ----------------------------------------------------
         GLFWwindow*      m_window{ nullptr };
         render::Renderer m_renderer;
         render::Camera   m_camera;
@@ -55,11 +83,16 @@ namespace macad::app
         ui::FrameStats   m_stats;
         PluginRegistry   m_registry;
         CommandStack     m_history;
+        ParameterTable   m_params;
 
         double m_boxDims    [3]{ 2.0, 1.5, 1.0 };
         double m_prevBoxDims[3]{ 2.0, 1.5, 1.0 };
-        std::vector<Feature> m_features;
+
+        std::vector<Feature>       m_features;
+        std::vector<AsmConstraint> m_constraints;
+        int                        m_selectedFeature{ -1 };
+
         bool m_running{ false };
     };
 
-} 
+}

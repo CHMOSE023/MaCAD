@@ -1,8 +1,6 @@
 #pragma once
 
-// Immediate-mode panels for Milestone 1: a command toolbar (driven by the
-// plugin registry), a placeholder feature tree, and a stats overlay. These are
-// intentionally thin; richer docking layouts arrive with later milestones.
+#include "core/AsmTypes.hpp"
 
 #include <cstdint>
 #include <string>
@@ -12,6 +10,7 @@ namespace macad
 {
     class PluginRegistry;
     class CommandStack;
+    class ParameterTable;
 }
 
 namespace macad::ui
@@ -19,29 +18,43 @@ namespace macad::ui
 
     struct FrameStats
     {
-        double fps{ 0.0 };
-        std::string backend;
+        double        fps{ 0.0 };
+        std::string   backend;
         std::uint32_t vertexCount{ 0 };
         std::uint32_t triangleCount{ 0 };
     };
 
-    // One entry in the feature tree (passed from app layer, no GPU types here).
-    struct FeatureInfo 
+    struct FeatureInfo
     {
-        std::string name;
+        std::string   name;
         std::uint32_t triangleCount{ 0 };
+    };
+
+    // Bitmask returned by Panels::draw — tells the app what changed.
+    enum PanelDirty : unsigned {
+        kDirtyNone        = 0,
+        kDirtyParams      = 1 << 0,   // parameter value edited → recompute
+        kDirtyTransforms  = 1 << 1,   // feature transform edited → updateTransform + solve
+        kDirtyConstraints = 1 << 2,   // constraint added/removed/edited → solve
     };
 
     class Panels
     {
     public:
-        // Draws all panels for the frame. Commands clicked in the toolbar are
-        // routed through the CommandStack so they are undoable when applicable.
-        // `features` is the current list of built solids for the feature tree.
-        static void draw(PluginRegistry&   registry,
-                         CommandStack&     history,
-                         const FrameStats& stats,
-                         const std::vector<FeatureInfo>& features);
+        // All panels for one frame.
+        // selectedFeature: index into features[], -1 = none (in/out).
+        // transforms:      one FeatureTransform per feature (in/out).
+        // constraints:     assembly constraint list (in/out).
+        // Returns OR of PanelDirty flags.
+        static unsigned draw(
+            PluginRegistry&                  registry,
+            CommandStack&                    history,
+            const FrameStats&                stats,
+            const std::vector<FeatureInfo>&  features,
+            ParameterTable&                  params,
+            int&                             selectedFeature,
+            std::vector<FeatureTransform>&   transforms,
+            std::vector<AsmConstraint>&      constraints);
     };
 
 } // namespace macad::ui

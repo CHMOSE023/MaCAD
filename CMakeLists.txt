@@ -40,3 +40,6 @@ include(cmake/Shaders.cmake)
 add_subdirectory(third_party/imgui_bgfx)
 
 add_subdirectory(src)
+
+# Example dynamically-loaded plugin (M6).
+add_subdirectory(plugins/sample)
