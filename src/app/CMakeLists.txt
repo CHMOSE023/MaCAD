@@ -10,7 +10,7 @@ target_link_libraries(MaCAD PRIVATE
     macad::ui
     macad::plugin
     glfw
-    imgui)  # app drives camera input via ImGui IO (WantCaptureMouse, MouseDelta)
+    imgui::imgui)  # app drives camera input via ImGui IO (WantCaptureMouse, MouseDelta)
 
 set_target_properties(MaCAD PROPERTIES
     FOLDER "macad"

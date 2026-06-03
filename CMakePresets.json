@@ -10,7 +10,7 @@
       "cacheVariables": {
         "MACAD_OCCT_SOURCE": "prebuilt",
         "OpenCASCADE_DIR": "$env{OpenCASCADE_DIR}",
-        "FETCHCONTENT_BASE_DIR": "${sourceDir}/.deps/_deps"
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake"
       }
     },
     {

@@ -5,8 +5,8 @@
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 
-#include "dxbc/vs_imgui.sc.bin.h"
-#include "dxbc/fs_imgui.sc.bin.h"
+#include "dx11/vs_imgui.sc.bin.h"
+#include "dx11/fs_imgui.sc.bin.h"
 
 #include <cstring>
 
@@ -52,8 +52,8 @@ bool ImGui_Implbgfx_Init(std::uint16_t viewId) {
         .end();
 
     g_state.program = bgfx::createProgram(
-        bgfx::createShader(bgfx::makeRef(vs_imgui_dxbc, sizeof(vs_imgui_dxbc))),
-        bgfx::createShader(bgfx::makeRef(fs_imgui_dxbc, sizeof(fs_imgui_dxbc))),
+        bgfx::createShader(bgfx::makeRef(vs_imgui_dx11, sizeof(vs_imgui_dx11))),
+        bgfx::createShader(bgfx::makeRef(fs_imgui_dx11, sizeof(fs_imgui_dx11))),
         true);
 
     g_state.texUniform =

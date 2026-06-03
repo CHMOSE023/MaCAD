@@ -17,7 +17,7 @@ target_include_directories(macad_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 # sketch model (interactive editor) and core. It must NOT see OCCT.
 target_link_libraries(macad_ui
     PUBLIC  macad::core macad::plugin macad::sketch
-    PRIVATE imgui imgui_bgfx glfw)
+    PRIVATE imgui::imgui imgui_bgfx glfw)
 
 set_target_properties(macad_ui PROPERTIES FOLDER "macad")
 add_library(macad::ui ALIAS macad_ui)

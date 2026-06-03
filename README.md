@@ -1,96 +1,194 @@
 # MaCAD
 
-一个基于**自建渲染视口**的参数化三维 CAD 平台。几何内核采用 **OpenCASCADE (OCCT)**,渲染完全构建在 **bgfx** 之上(不使用 Qt、不使用 OCCT 的 AIS / OpenGL 查看器)。
+MaCAD 是一个基于 **OpenCASCADE (OCCT)**、**bgfx** 和 **Dear ImGui** 的参数化三维 CAD 原型项目。
 
-> **进度** — M1–M4 已实现,M5 完整装配已实现,M6 插件动态加载已实现(基础)。
-> 详细里程碑与状态见 📍 [docs/ROADMAP.md](docs/ROADMAP.md)。
+项目使用自建 bgfx 渲染视口，不使用 Qt，也不使用 OCCT 的 AIS / OpenGL 查看器。当前构建系统为 **CMakePresets.json + Ninja Multi-Config**，依赖主要由 **vcpkg** 提供。
+
+详细里程碑见 [docs/ROADMAP.md](docs/ROADMAP.md)。
 
 ## 技术栈
 
-C++20 · OpenCASCADE 8.0.0 · bgfx · Dear ImGui · GLFW · glm · spdlog · CMake(Ninja Multi-Config)
+- C++20
+- CMake + Ninja Multi-Config
+- Visual Studio 2026 / MSVC
+- OpenCASCADE 8.0.0
+- bgfx / bx / bimg
+- Dear ImGui
+- GLFW
+- glm
+- spdlog
 
-## 架构
+## 目录结构
 
+```text
+src/app        程序入口、窗口、主循环、各模块装配
+src/core       日志、基础类型、MeshData、参数表、装配数据类型
+src/geometry   OCCT 封装、基本体、草图转实体、三角化
+src/render     bgfx 设备、相机、GPU 网格、shader 程序
+src/sketch     2D 草图模型和约束求解器
+src/ui         ImGui 层、工具栏、面板、草图视图
+src/plugin     命令接口、插件接口、注册表、命令栈
+plugins/sample 示例插件
+third_party    项目内维护的第三方适配代码
 ```
-app  ──▶ ui · render · geometry · plugin · sketch · core
-geometry ──▶ core + OCCT      (唯一引入 OCCT 的层)
-render/ui ──▶ core            (禁止引入 OCCT)
+
+模块依赖大致如下：
+
+```text
+app      -> ui + render + geometry + plugin + sketch + core
+geometry -> core + OCCT
+render   -> core + bgfx
+ui       -> core + plugin + sketch + ImGui + GLFW
 ```
 
-几何与渲染通过唯一的数据契约 [`core::MeshData`](src/core/MeshData.hpp) 解耦:任意 `TopoDS_Shape`
-经 [`geometry::Tessellator`](src/geometry/Tessellator.cpp) 三角化为 `MeshData`,再由
-[`render::Mesh`](src/render/Mesh.cpp) 上传到 GPU。所有用户操作统一走
-[`ICommand`](src/plugin/ICommand.hpp) 接口——插件(M6)也复用同一套。
+几何和渲染之间通过 [core::MeshData](src/core/MeshData.hpp) 解耦。OCCT 生成的 `TopoDS_Shape` 会先由 [geometry::Tessellator](src/geometry/Tessellator.cpp) 转成 `MeshData`，再由 [render::Mesh](src/render/Mesh.cpp) 上传到 GPU。
 
-| 层 | 路径 | 职责 |
-|-----|------|------|
-| core | `src/core` | 日志、类型、`MeshData`、参数表、装配数据类型 |
-| geometry | `src/geometry` | OCCT 封装:基本体、三角化、草图→实体 |
-| sketch | `src/sketch` | 2D 参数化草图模型 + 约束求解器 |
-| render | `src/render` | bgfx 设备、相机、网格缓冲、着色器 |
-| ui | `src/ui` | ImGui 层 + 面板(工具栏/特征树/草图视图/装配等) |
-| plugin | `src/plugin` | 命令与插件接口、注册表、命令栈(撤销/重做) |
-| app | `src/app` | 窗口、主循环、各层装配 |
+## 依赖安装
 
-## 依赖
+### vcpkg
 
-`bgfx.cmake`、GLFW、glm、spdlog、Dear ImGui 由 CMake `FetchContent` 自动拉取
-(见 [`cmake/Dependencies.cmake`](cmake/Dependencies.cmake))。
+当前项目直接依赖以下 vcpkg 包：
 
-**OCCT** 体量大,单独处理(见 [`cmake/OCCT.cmake`](cmake/OCCT.cmake)),通过 `MACAD_OCCT_SOURCE` 提供两种模式:
+- `glm`
+- `spdlog[fmt]`
+- `glfw3`
+- `imgui[glfw-binding]`
+- `bgfx[multithreaded,tools]`
 
-- `prebuilt`(默认,推荐):使用已安装的 OCCT SDK。将环境变量或 CMake 缓存变量
-  `OpenCASCADE_DIR` 指向 SDK 的 `cmake/` 目录(即包含 `OpenCASCADEConfig.cmake` 的目录)。
-- `fetch`:通过 FetchContent 从源码编译 OCCT。**首次构建预计 30–60 分钟以上。**
-
-## 构建(Windows · Visual Studio 2022 · Ninja)
-
-> ⚠️ 生成器是 **Ninja Multi-Config**,它不会自动设置编译器环境。
-> 请在 **「VS 2022 开发者 PowerShell / 开发者命令提示符」** 中执行(或直接在 VS 里构建),
-> 否则会报 `cstdint` / `string` 找不到——那是缺少 MSVC 的 `INCLUDE` 环境,并非代码错误。
+先设置 `VCPKG_ROOT`，指向你的 vcpkg 根目录：
 
 ```powershell
-# 1. 指向预编译的 OCCT 8.0.0 SDK
-#    (从 V8_0_0 的 GitHub Release 下载 occt-combined-with-debug-no-pch.zip,
-#     解压后确保 <根目录>\cmake\OpenCASCADEConfig.cmake 存在)
+$env:VCPKG_ROOT = "E:\dev\vcpkg"
+```
+
+安装命令：
+
+```powershell
+& "$env:VCPKG_DIR\vcpkg.exe" install `
+  glm:x64-windows `
+  spdlog[fmt]:x64-windows `
+  glfw3:x64-windows `
+  imgui[glfw-binding]:x64-windows `
+  "bgfx[multithreaded,tools]:x64-windows"
+```
+
+这里列的是直接依赖。vcpkg 会自动安装传递依赖，例如 `fmt`、`lodepng`、`miniz`、`tinyexr`、`libsquish`、`glslang`、`spirv-tools`、`spirv-headers`、`spirv-cross`、`meshoptimizer`、`cgltf` 等。通常不需要手动单独安装这些传递依赖。
+
+`bgfx[tools]` 必须安装，因为构建时会调用 `shaderc.exe` 生成内嵌 shader 头文件。缺少它时，CMake 会报：
+
+```text
+bgfx shader compiler was not found
+```
+
+### OpenCASCADE
+
+当前预设使用本地预编译 OpenCASCADE，不通过 vcpkg 安装。
+
+需要设置 `OpenCASCADE_DIR`，指向包含 `OpenCASCADEConfig.cmake` 的目录。例如：
+
+```powershell
 $env:OpenCASCADE_DIR = "C:\OpenCASCADE\opencascade-8.0.0-vc14-64\cmake"
+```
 
-# 2. 配置 + 构建(注意:配置预设名是 MaCAD,构建预设名是 x64-debug)
+也可以在系统环境变量中设置 `OpenCASCADE_DIR`，或者在 `CMakePresets.json` 中配置对应路径。
+
+## 构建
+
+建议在 **Visual Studio 2026 Developer PowerShell** 或 **Developer Command Prompt** 中执行命令。普通 PowerShell / cmd 可能没有加载 MSVC 和 Windows SDK 环境，会出现类似错误：
+
+```text
+Cannot open include file: 'string'
+cannot open file 'kernel32.lib'
+```
+
+这类错误通常不是源码问题，而是没有进入 VS 开发者环境。
+
+### 配置
+
+```powershell
 cmake --preset MaCAD
-cmake --build --preset x64-debug
+```
 
-# 3. 运行(无需手动设置 PATH)
+### 编译 Debug
+
+```powershell
+cmake --build --preset x64-debug
+```
+
+如果输出：
+
+```text
+ninja: no work to do.
+```
+
+说明目标已经是最新状态，不需要重新编译。
+
+### 编译 Release
+
+```powershell
+cmake --build --preset x64-release
+```
+
+## 运行
+
+Debug 可执行文件：
+
+```powershell
 .\build\MaCAD\bin\Debug\MaCAD.exe
 ```
 
-**关于运行时 DLL**:构建后会有一个 POST_BUILD 步骤,自动把 OCCT 工具包 DLL 与第三方依赖
-(jemalloc、freetype 等,来自同级的 `3rdparty-vc14-64`)拷到 exe 旁边,因此可**直接双击运行**,
-无需配置 PATH。`run.bat` 仍可用作备选。
+Release 可执行文件：
 
-如需从源码编译 OCCT,在 `CMakePresets.json` 的缓存变量中设置 `MACAD_OCCT_SOURCE=fetch`。
+```powershell
+.\build\MaCAD\bin\Release\MaCAD.exe
+```
 
-### 首次搭建踩坑记录
+也可以在 Visual Studio 的 CMake 视图中选择 `MaCAD.exe` 启动调试。
 
-- **bgfx 子模块**:bgfx(bgfx/bx/bimg)作为 `bgfx.cmake` 的 git 子模块拉取。
-  网络不稳时 CMake 内的 clone 会失败。可预先在 `.deps/bgfx.cmake` 放一份
-  本地副本(带子模块的浅克隆),[`cmake/Dependencies.cmake`](cmake/Dependencies.cmake) 会自动识别复用。
-- **着色器包含路径**:源码构建下 `BGFX_SHADER_INCLUDE_PATH` 为空,shaderc 找不到
-  `bgfx_shader.sh`;已通过 `MACAD_BGFX_SHADER_INCLUDE` 显式传入(见
-  [`cmake/Shaders.cmake`](cmake/Shaders.cmake))。
-- **渲染后端**:当前内嵌 DX11(`s_5_0`)着色器 profile 并强制 Direct3D11 后端;
-  多后端需在 [`cmake/Shaders.cmake`](cmake/Shaders.cmake) 中编译更多 profile。
-- **构建提速**:已关闭未用的 bgfx 工具(geometry/texture/viewers)、开启 `/MP` 并行与
-  `BGFX_AMALGAMATED`;首次构建仍需编译一次 shaderc(glslang/spirv),属一次性成本。
+## 常见问题
 
-## 你应当看到的画面
+### `bgfx shader compiler was not found`
 
-视口中央一个带光照的立方体,可用鼠标轨道旋转(左键拖拽)、平移(中键/右键拖拽)、
-缩放(滚轮)。ImGui 提供:**工具栏**(含 *Create Box* / *Sketch* 等命令)、**特征树**、
-**Components / Mates**(装配)、**Parameters**(参数)、**Plugins**(插件)、**Stats**
-(后端、FPS、顶点/三角形数)等面板。
+原因：没有安装 `bgfx[tools]`，或者 CMake 缓存里仍保留旧的 `shaderc_EXECUTABLE-NOTFOUND`。
 
-## 路线图
+处理：
 
-M2 草图 + 约束求解器 · M3 拉伸/旋转特征 + 特征树 · M4 参数系统 + 依赖重算 ·
-M5 多实例装配 + 配合求解器 · M6 插件动态加载。各层模块与接口边界均已就位。
-完整状态见 [docs/ROADMAP.md](docs/ROADMAP.md)。
+```powershell
+& "$env:VCPKG_ROOT\vcpkg.exe" install "bgfx[multithreaded,tools]:x64-windows" --recurse
+cmake --preset MaCAD
+```
+
+如果仍然报错，可以删除 `build/MaCAD` 后重新配置。
+
+### `Cannot open include file: 'string'`
+
+原因：没有使用 VS 开发者命令行，MSVC 标准库 include 路径没有加载。
+
+处理：打开 **Visual Studio 2026 Developer PowerShell** 后重新执行构建命令。
+
+### `cannot open file 'kernel32.lib'`
+
+原因：Windows SDK lib 路径没有加载，通常也是没有使用 VS 开发者命令行。
+
+处理：打开 **Visual Studio 2026 Developer PowerShell** 后重新配置和构建。
+
+### vcpkg 下载失败
+
+如果安装依赖时出现 SSL 或代理错误，先确认代理可用。必要时在当前终端设置：
+
+```cmd
+set HTTP_PROXY=http://127.0.0.1:6789
+set HTTPS_PROXY=http://127.0.0.1:6789
+```
+
+然后重新执行 vcpkg 安装命令。
+
+## 当前界面
+
+程序启动后应显示一个 bgfx 渲染视口和多个 ImGui 面板。当前功能包括基础模型显示、草图入口、参数面板、装配相关面板、插件加载入口和统计信息面板。
+
+## 备注
+
+- 当前 shader profile 使用 DX11，对应 bgfx 的 `s_5_0` / `dx11` 输出。
+- 构建目录由 `CMakePresets.json` 指定为 `build/MaCAD`。
+- 不建议手动修改 `build/` 内文件；配置或依赖变化后重新运行 CMake preset。

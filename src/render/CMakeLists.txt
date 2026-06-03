@@ -16,7 +16,7 @@ target_include_directories(macad_render PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 # render uses bgfx + core only. It must NOT see OCCT.
 target_link_libraries(macad_render
     PUBLIC  macad::core
-    PRIVATE bgfx bx bimg)
+    PRIVATE bgfx::bgfx bgfx::bx bgfx::bimg)
 
 set_target_properties(macad_render PROPERTIES FOLDER "macad")
 add_library(macad::render ALIAS macad_render)

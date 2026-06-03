@@ -1,45 +1,171 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(MaCAD
-    VERSION 0.1.0
-    DESCRIPTION "Parametric 3D CAD platform (OCCT + bgfx + ImGui)"
-    LANGUAGES CXX)
+project( MaCAD  VERSION 0.1.0  DESCRIPTION "Parametric 3D CAD " LANGUAGES CXX)
 
-# ---- Global settings -------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Global
+# ------------------------------------------------------------------------------
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(MSVC)
+    add_compile_options(/MP)
+endif()
 
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()
 
-# Group targets in IDE folders (Visual Studio).
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-# MSVC: compile translation units in parallel within each project (/MP). Big
-# win under the Visual Studio generator, which otherwise serializes per-project.
-if(MSVC)
-    add_compile_options(/MP)
+# ------------------------------------------------------------------------------
+# Dependencies (vcpkg)
+# ------------------------------------------------------------------------------
+
+find_package(glm    CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(glfw3  CONFIG REQUIRED)
+find_package(imgui  CONFIG REQUIRED)
+find_package(bgfx   CONFIG REQUIRED)
+
+if(TARGET bgfx::shaderc)
+    get_target_property(MACAD_BGFX_SHADERC bgfx::shaderc IMPORTED_LOCATION)
+    if(NOT MACAD_BGFX_SHADERC)
+        get_target_property(MACAD_BGFX_SHADERC bgfx::shaderc IMPORTED_LOCATION_RELEASE)
+    endif()
 endif()
 
-# ---- Options ---------------------------------------------------------------
-# How OpenCASCADE is provided:
-#   prebuilt -> find_package(OpenCASCADE) from an installed/extracted SDK
-#   fetch    -> FetchContent the OCCT sources (heavy: 30-60+ min first build)
-set(MACAD_OCCT_SOURCE "prebuilt" CACHE STRING "OCCT source mode: prebuilt | fetch")
-set_property(CACHE MACAD_OCCT_SOURCE PROPERTY STRINGS prebuilt fetch)
+if(NOT MACAD_BGFX_SHADERC OR MACAD_BGFX_SHADERC MATCHES "-NOTFOUND$")
+    message(FATAL_ERROR
+        "bgfx shader compiler was not found. Install the vcpkg tools feature: "
+        "vcpkg install \"bgfx[tools]:${VCPKG_TARGET_TRIPLET}\" --recurse")
+endif()
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+foreach(MACAD_BGFX_TOOL bin2c texturec geometryc shaderc)
+    if(TARGET bgfx::${MACAD_BGFX_TOOL})
+        set_target_properties(bgfx::${MACAD_BGFX_TOOL} PROPERTIES
+            MAP_IMPORTED_CONFIG_DEBUG Release
+            MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+            MAP_IMPORTED_CONFIG_MINSIZEREL Release)
+    endif()
+endforeach()
 
-include(cmake/Dependencies.cmake)
-include(cmake/OCCT.cmake)
-include(cmake/Shaders.cmake)
+# ------------------------------------------------------------------------------
+# OpenCASCADE (local install)
+# ------------------------------------------------------------------------------
 
-# Vendored third-party that needs our build (ImGui's bgfx renderer backend).
+find_package(OpenCASCADE REQUIRED)
+
+add_library(macad_occt INTERFACE)
+add_library(macad::occt ALIAS macad_occt)
+
+target_include_directories(macad_occt  INTERFACE  ${OpenCASCADE_INCLUDE_DIR} )
+target_link_directories   (macad_occt  INTERFACE  ${OpenCASCADE_LIBRARY_DIR} )
+
+target_link_libraries(macad_occt
+    INTERFACE
+    TKernel
+    TKMath
+    TKG2d
+    TKG3d
+    TKGeomBase
+    TKBRep
+    TKGeomAlgo
+    TKTopAlgo
+    TKPrim
+    TKMesh
+)
+
+# ------------------------------------------------------------------------------
+# bgfx shader support
+# ------------------------------------------------------------------------------
+
+set(MACAD_SHADER_PROFILE  "s_5_0"  CACHE STRING "shader profile")
+
+if(NOT COMMAND bgfx_compile_shaders)
+
+    find_file(
+        BGFX_TOOL_UTILS
+        bgfxToolUtils.cmake
+        PATHS
+            "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/bgfx"
+        NO_DEFAULT_PATH
+    )
+
+    if(NOT BGFX_TOOL_UTILS)
+        message(FATAL_ERROR
+            "bgfxToolUtils.cmake not found")
+    endif()
+
+    include("${BGFX_TOOL_UTILS}")
+endif()
+
+function(macad_add_shaders TARGET)
+
+    set(oneValue SHADER_DIR OUTPUT_DIR)
+    set(multiValue VERTEX FRAGMENT)
+
+    cmake_parse_arguments(
+        ARG
+        ""
+        "${oneValue}"
+        "${multiValue}"
+        ${ARGN}
+    )
+
+    if(NOT ARG_OUTPUT_DIR)
+        set(ARG_OUTPUT_DIR
+            "${CMAKE_CURRENT_BINARY_DIR}/shaders")
+    endif()
+
+    target_include_directories(
+        ${TARGET}
+        PRIVATE
+        "${ARG_OUTPUT_DIR}"
+    )
+
+    bgfx_compile_shaders(
+        TYPE VERTEX
+        SHADERS ${ARG_VERTEX}
+        VARYING_DEF "${ARG_SHADER_DIR}/varying.def.sc"
+        OUTPUT_DIR "${ARG_OUTPUT_DIR}"
+        PROFILES ${MACAD_SHADER_PROFILE}
+        AS_HEADERS
+        OUT_FILES_VAR _vs_outputs
+    )
+
+    bgfx_compile_shaders(
+        TYPE FRAGMENT
+        SHADERS ${ARG_FRAGMENT}
+        VARYING_DEF "${ARG_SHADER_DIR}/varying.def.sc"
+        OUTPUT_DIR "${ARG_OUTPUT_DIR}"
+        PROFILES ${MACAD_SHADER_PROFILE}
+        AS_HEADERS
+        OUT_FILES_VAR _fs_outputs
+    )
+
+    target_sources(
+        ${TARGET}
+        PRIVATE
+        ${_vs_outputs}
+        ${_fs_outputs}
+    )
+
+endfunction()
+
+# ------------------------------------------------------------------------------
+# Third-party
+# ------------------------------------------------------------------------------ 
 add_subdirectory(third_party/imgui_bgfx)
 
+# ------------------------------------------------------------------------------
+# Source
+# ------------------------------------------------------------------------------ 
 add_subdirectory(src)
 
-# Example dynamically-loaded plugin (M6).
+# ------------------------------------------------------------------------------
+# Plugins
+# ------------------------------------------------------------------------------ 
 add_subdirectory(plugins/sample)
