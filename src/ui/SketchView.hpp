@@ -39,6 +39,11 @@ namespace macad::ui
         double pendingExtrudeHeight() const { return m_extrudeHeight; }
         void   clearPendingExtrude()        { m_pendingExtrude = false; }
 
+        bool   hasPendingRevolve()    const { return m_pendingRevolve; }
+        double pendingRevolveAngle()  const { return m_revolveAngle; }
+        bool   pendingRevolveAroundV() const { return m_revolveAroundV; }
+        void   clearPendingRevolve()        { m_pendingRevolve = false; }
+
         // Per-frame input + overlay rendering. `viewProj` is proj * view from the
         // camera; mouse position and viewport are read from ImGui IO.
         void update(const mat4& viewProj);
@@ -93,6 +98,11 @@ namespace macad::ui
         // Extrude request pending consumption by the application.
         bool   m_pendingExtrude{ false };
         double m_extrudeHeight{ 1.0 };
+
+        // Revolve request pending consumption by the application.
+        bool   m_pendingRevolve{ false };
+        double m_revolveAngle{ 360.0 };
+        bool   m_revolveAroundV{ true };  // true = sketch V(Y) axis, false = U(X) axis
     };
 
 }  

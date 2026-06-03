@@ -25,6 +25,15 @@ namespace macad::geometry {
         static Shape extrude(const Shape& face,
                              const sketch::SketchPlane& plane,
                              double height);
+
+        // Revolve a face around one of the sketch plane's own axes.
+        //   aroundV = true  → revolve around the plane's V axis (sketch "Y")
+        //   aroundV = false → revolve around the plane's U axis (sketch "X")
+        //   angleDeg        → sweep angle in degrees (360 = full solid of revolution)
+        static Shape revolve(const Shape& face,
+                             const sketch::SketchPlane& plane,
+                             bool   aroundV,
+                             double angleDeg);
     };
 
 } // namespace macad::geometry

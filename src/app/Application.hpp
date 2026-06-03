@@ -37,6 +37,7 @@ namespace macad::app
         void handleCameraInput();
         void syncFramebufferSize();
         void onExtrude();      // called when SketchView has a pending extrude
+        void onRevolve();      // called when SketchView has a pending revolve
 
         // A built solid feature: name + GPU mesh.
         struct Feature 

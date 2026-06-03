@@ -7,14 +7,18 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
+#include <BRepPrimAPI_MakeRevol.hxx>
 // OCCT geometry primitives
 #include <GC_MakeArcOfCircle.hxx>
 #include <TopoDS_Shape.hxx>
+#include <gp_Ax1.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
+
+#include <numbers>
 
 #include <vector>
 
@@ -157,6 +161,27 @@ namespace macad::geometry {
             return {};
         }
         return Shape(prism.Shape());
+    }
+
+    Shape SketchToShape::revolve(const Shape& face,
+                                 const sketch::SketchPlane& plane,
+                                 bool   aroundV,
+                                 double angleDeg) {
+        if (face.isNull()) return {};
+
+        const glm::vec3 orig = plane.origin();
+        const glm::vec3 dir  = aroundV ? plane.vAxis() : plane.uAxis();
+
+        const gp_Ax1 axis(gp_Pnt(orig.x, orig.y, orig.z),
+                          gp_Dir(dir.x,  dir.y,  dir.z));
+
+        const double angleRad = angleDeg * std::numbers::pi / 180.0;
+        BRepPrimAPI_MakeRevol revol(face.occt(), axis, angleRad);
+        if (!revol.IsDone()) {
+            MACAD_LOG_ERROR("SketchToShape::revolve: BRepPrimAPI_MakeRevol failed");
+            return {};
+        }
+        return Shape(revol.Shape());
     }
 
 } // namespace macad::geometry

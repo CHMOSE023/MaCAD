@@ -204,11 +204,16 @@ namespace macad::app
 
             handleCameraInput();
 
-            // Consume a pending extrude from the sketch editor.
-            if (m_sketchView.hasPendingExtrude()) 
+            // Consume pending operations from the sketch editor.
+            if (m_sketchView.hasPendingExtrude())
             {
                 onExtrude();
                 m_sketchView.clearPendingExtrude();
+            }
+            if (m_sketchView.hasPendingRevolve())
+            {
+                onRevolve();
+                m_sketchView.clearPendingRevolve();
             }
             // Ctrl+Z / Ctrl+Y undo-redo (when ImGui is not capturing keyboard).
             if (!ImGui::GetIO().WantCaptureKeyboard)
@@ -301,6 +306,51 @@ namespace macad::app
         m_stats.triangleCount = static_cast<std::uint32_t>(data.triangleCount());
 
         MACAD_LOG_INFO("Extrude done: {} verts, {} tris",
+                       data.vertexCount(), data.triangleCount());
+    }
+
+    void Application::onRevolve()
+    {
+        const sketch::Sketch&      sk      = m_sketchView.sketch();
+        const sketch::SketchPlane& plane   = sk.plane();
+        const double               angle   = m_sketchView.pendingRevolveAngle();
+        const bool                 aroundV = m_sketchView.pendingRevolveAroundV();
+
+        MACAD_LOG_INFO("Revolving sketch (angle={:.1f}°, axis={}) ...",
+                       angle, aroundV ? "V" : "U");
+
+        const geometry::Shape face = geometry::SketchToShape::buildFace(sk);
+        if (face.isNull())
+        {
+            MACAD_LOG_WARN("Revolve: sketch has no closed profile — draw a closed "
+                           "polygon or a circle first");
+            return;
+        }
+
+        const geometry::Shape solid = geometry::SketchToShape::revolve(face, plane, aroundV, angle);
+        if (solid.isNull())
+        {
+            MACAD_LOG_ERROR("Revolve: solid creation failed");
+            return;
+        }
+
+        const MeshData data = geometry::Tessellator::Tessellate(solid, 0.05);
+        if (data.vertexCount() == 0)
+        {
+            MACAD_LOG_ERROR("Revolve: tessellation produced an empty mesh");
+            return;
+        }
+
+        Feature f;
+        f.name = "Revolve " + std::to_string(m_features.size() + 1);
+        f.mesh = std::make_unique<render::Mesh>();
+        f.mesh->upload(data);
+        m_features.push_back(std::move(f));
+
+        m_stats.vertexCount   = static_cast<std::uint32_t>(data.vertexCount());
+        m_stats.triangleCount = static_cast<std::uint32_t>(data.triangleCount());
+
+        MACAD_LOG_INFO("Revolve done: {} verts, {} tris",
                        data.vertexCount(), data.triangleCount());
     }
 

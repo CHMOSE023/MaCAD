@@ -512,12 +512,28 @@ namespace macad::ui {
             if (ImGui::Button("Exit Sketch")) end();
 
             ImGui::Separator();
+
+            // ---- Extrude ------------------------------------------------
             ImGui::SetNextItemWidth(70.0f);
             ImGui::InputDouble("Height##extrude", &m_extrudeHeight, 0.0, 0.0, "%.2f");
             ImGui::SameLine();
             if (ImGui::Button("Extrude")) {
                 m_pendingExtrude = true;
-                end(); // leave sketch mode; Application will pick this up
+                end();
+            }
+
+            // ---- Revolve ------------------------------------------------
+            ImGui::SetNextItemWidth(70.0f);
+            ImGui::InputDouble("Angle##revolve", &m_revolveAngle, 0.0, 0.0, "%.1f");
+            ImGui::SameLine();
+            // Axis selector: U = sketch X axis, V = sketch Y axis
+            if (ImGui::RadioButton("U##ax", !m_revolveAroundV)) m_revolveAroundV = false;
+            ImGui::SameLine();
+            if (ImGui::RadioButton("V##ax",  m_revolveAroundV)) m_revolveAroundV = true;
+            ImGui::SameLine();
+            if (ImGui::Button("Revolve")) {
+                m_pendingRevolve = true;
+                end();
             }
 
             ImGui::Separator();
