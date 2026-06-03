@@ -13,7 +13,8 @@
 
 namespace macad::sketch {
 
-    class SketchPlane {
+    class SketchPlane 
+    {
     public:
         SketchPlane() = default;
         SketchPlane(const vec3& origin, const vec3& uAxis, const vec3& vAxis)
@@ -23,15 +24,16 @@ namespace macad::sketch {
         vec3 to3d(const vec2& uv) const { return m_origin + m_u * uv.x + m_v * uv.y; }
 
         // 3D world point -> 2D sketch coords (orthogonal projection onto plane).
-        vec2 to2d(const vec3& p) const {
+        vec2 to2d(const vec3& p) const 
+        {
             const vec3 d = p - m_origin;
             return { glm::dot(d, m_u), glm::dot(d, m_v) };
         }
 
         const vec3& origin() const { return m_origin; }
-        const vec3& uAxis() const { return m_u; }
-        const vec3& vAxis() const { return m_v; }
-        vec3 normal() const { return glm::normalize(glm::cross(m_u, m_v)); }
+        const vec3& uAxis()  const { return m_u; }
+        const vec3& vAxis()  const { return m_v; }
+        vec3        normal() const { return glm::normalize(glm::cross(m_u, m_v)); }
 
     private:
         vec3 m_origin{ 0.0f, 0.0f, 0.0f };
@@ -39,4 +41,4 @@ namespace macad::sketch {
         vec3 m_v{ 0.0f, 1.0f, 0.0f };
     };
 
-} // namespace macad::sketch
+} 

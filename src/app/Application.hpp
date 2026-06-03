@@ -11,12 +11,18 @@
 #include "ui/Panels.hpp"
 #include "ui/SketchView.hpp"
 #include "plugin/PluginRegistry.hpp"
+#include "plugin/CommandStack.hpp"
+
+#include <memory>
+#include <string>
+#include <vector>
 
 struct GLFWwindow;
 
-namespace macad::app {
-
-    class Application {
+namespace macad::app
+{
+    class Application 
+    {
     public:
         Application() = default;
         ~Application();
@@ -30,17 +36,28 @@ namespace macad::app {
         void rebuildBox(double dx, double dy, double dz);
         void handleCameraInput();
         void syncFramebufferSize();
+        void onExtrude();      // called when SketchView has a pending extrude
 
-        GLFWwindow* m_window{ nullptr };
+        // A built solid feature: name + GPU mesh.
+        struct Feature 
+        {
+            std::string                  name;
+            std::unique_ptr<render::Mesh> mesh;
+        };
+
+        GLFWwindow*      m_window{ nullptr };
         render::Renderer m_renderer;
-        render::Camera m_camera;
-        render::Mesh m_mesh;
-        ui::ImGuiLayer m_imgui;
-        ui::SketchView m_sketchView;
-        ui::FrameStats m_stats;
-        PluginRegistry m_registry;
+        render::Camera   m_camera;
+        render::Mesh     m_mesh;
+        ui::ImGuiLayer   m_imgui;
+        ui::SketchView   m_sketchView;
+        ui::FrameStats   m_stats;
+        PluginRegistry   m_registry;
+        CommandStack     m_history;
 
-        double m_boxDims[3]{ 2.0, 1.5, 1.0 };
+        double m_boxDims    [3]{ 2.0, 1.5, 1.0 };
+        double m_prevBoxDims[3]{ 2.0, 1.5, 1.0 };
+        std::vector<Feature> m_features;
         bool m_running{ false };
     };
 

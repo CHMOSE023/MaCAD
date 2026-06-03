@@ -6,14 +6,16 @@
 
 #include <string>
 
-namespace macad {
+namespace macad 
+{
 
-    class ICommand {
+    class ICommand 
+    {
     public:
         virtual ~ICommand() = default;
 
         // Stable identifier, e.g. "macad.geometry.createBox".
-        virtual std::string id() const = 0;
+        virtual std::string id()    const = 0;
 
         // Human-readable label for toolbars/menus.
         virtual std::string label() const = 0;
@@ -23,6 +25,15 @@ namespace macad {
 
         // Performs the action.
         virtual void execute() = 0;
+
+        // Returns true if this command supports undo.
+        // Commands that opt in must implement undo().
+        virtual bool undoable() const { return false; }
+
+        // Reverts the effect of the most recent execute(). Only called when
+        // undoable() returns true. Must leave the application in the state it
+        // was in before execute() ran.
+        virtual void undo() {}
     };
 
-} // namespace macad
+}  

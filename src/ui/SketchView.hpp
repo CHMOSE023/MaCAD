@@ -16,9 +16,11 @@
 
 #include <vector>
 
-namespace macad::ui {
+namespace macad::ui
+{
 
-    class SketchView {
+    class SketchView 
+    {
     public:
         enum class Tool { Select, Line, Circle, Arc, Point };
 
@@ -27,6 +29,15 @@ namespace macad::ui {
         // enters sketch mode. Ends it if already active.
         void toggle();
         void end();
+
+        // Read-only access to the current sketch (for extrude, etc.).
+        const sketch::Sketch& sketch() const { return m_sketch; }
+
+        // Pending extrude request: set when the user clicks "Extrude" in the
+        // panel. The application consumes this each frame via takePendingExtrude().
+        bool   hasPendingExtrude()    const { return m_pendingExtrude; }
+        double pendingExtrudeHeight() const { return m_extrudeHeight; }
+        void   clearPendingExtrude()        { m_pendingExtrude = false; }
 
         // Per-frame input + overlay rendering. `viewProj` is proj * view from the
         // camera; mouse position and viewport are read from ImGui IO.
@@ -37,11 +48,11 @@ namespace macad::ui {
 
     private:
         // Projection helpers (screen space matches ImGui MousePos / DisplaySize).
-        bool worldToScreen(const mat4& viewProj, const vec3& world, vec2& outScreen) const;
+        bool worldToScreen (const mat4& viewProj, const vec3& world, vec2& outScreen) const;
         vec2 screenToSketch(const mat4& viewProj, const vec2& screen) const;
 
         // Picking.
-        sketch::PointId pickPoint(const mat4& viewProj, const vec2& mouse, float pixels) const;
+        sketch::PointId  pickPoint (const mat4& viewProj, const vec2& mouse, float pixels) const;
         sketch::EntityId pickEntity(const mat4& viewProj, const vec2& mouse, float pixels) const;
 
         // Editing.
@@ -52,8 +63,9 @@ namespace macad::ui {
         bool isSelected(sketch::EntityId e) const;
         bool isSelected(sketch::PointId p) const;
 
-        sketch::Sketch m_sketch;
+        sketch::Sketch      m_sketch;
         sketch::SolveResult m_solve;
+
         bool m_active{ false };
         Tool m_tool{ Tool::Select };
 
@@ -77,6 +89,11 @@ namespace macad::ui {
         // Last picked-plane cursor (for rubber-band previews).
         vec2 m_cursorUv{ 0.0f, 0.0f };
         bool m_cursorValid{ false };
+
+        // Extrude request pending consumption by the application.
+        bool   m_pendingExtrude{ false };
+        double m_extrudeHeight{ 1.0 };
     };
 
-} // namespace macad::ui
+}  
+

@@ -2,15 +2,17 @@
 
 #include <cmath>
 
-namespace macad::sketch {
-
-    bool isDimension(ConstraintKind k) {
-        return k == ConstraintKind::Distance || k == ConstraintKind::Radius ||
-            k == ConstraintKind::Angle;
+namespace macad::sketch
+{ 
+    bool isDimension(ConstraintKind k) 
+    {
+        return k == ConstraintKind::Distance || k == ConstraintKind::Radius || k == ConstraintKind::Angle;
     }
 
-    const char* constraintName(ConstraintKind k) {
-        switch (k) {
+    const char* constraintName(ConstraintKind k)
+    {
+        switch (k)
+        {
         case ConstraintKind::Coincident: return "Coincident";
         case ConstraintKind::Horizontal: return "Horizontal";
         case ConstraintKind::Vertical:   return "Vertical";
@@ -24,12 +26,14 @@ namespace macad::sketch {
         return "?";
     }
 
-    int Sketch::addVar(double v) {
+    int Sketch::addVar(double v) 
+    {
         m_vars.push_back(v);
         return static_cast<int>(m_vars.size()) - 1;
     }
 
-    PointId Sketch::addPoint(double x, double y, bool fixed) {
+    PointId Sketch::addPoint(double x, double y, bool fixed)
+    {
         Point p;
         p.id = PointId{ m_points.size() + 1 };
         p.vx = addVar(x);
@@ -39,7 +43,8 @@ namespace macad::sketch {
         return p.id;
     }
 
-    EntityId Sketch::addPointEntity(double x, double y) {
+    EntityId Sketch::addPointEntity(double x, double y)
+    {
         const PointId pid = addPoint(x, y);
         Entity e;
         e.id = EntityId{ m_entities.size() + 1 };
@@ -49,21 +54,24 @@ namespace macad::sketch {
         return e.id;
     }
 
-    EntityId Sketch::addLine(double x0, double y0, double x1, double y1) {
+    EntityId Sketch::addLine(double x0, double y0, double x1, double y1) 
+    {
         return addLineFromPoints(addPoint(x0, y0), addPoint(x1, y1));
     }
 
-    EntityId Sketch::addLineFromPoints(PointId a, PointId b) {
+    EntityId Sketch::addLineFromPoints(PointId a, PointId b) 
+    {
         Entity e;
-        e.id = EntityId{ m_entities.size() + 1 };
+        e.id   = EntityId{ m_entities.size() + 1 };
         e.kind = EntityKind::Line;
-        e.p0 = a;
-        e.p1 = b;
+        e.p0   = a;
+        e.p1   = b;
         m_entities.push_back(e);
         return e.id;
     }
 
-    EntityId Sketch::addCircle(double cx, double cy, double r) {
+    EntityId Sketch::addCircle(double cx, double cy, double r)
+    {
         Entity e;
         e.id = EntityId{ m_entities.size() + 1 };
         e.kind = EntityKind::Circle;
@@ -73,7 +81,8 @@ namespace macad::sketch {
         return e.id;
     }
 
-    EntityId Sketch::addArc(double cx, double cy, double r, double startAngle, double endAngle) {
+    EntityId Sketch::addArc(double cx, double cy, double r, double startAngle, double endAngle) 
+    {
         Entity e;
         e.id = EntityId{ m_entities.size() + 1 };
         e.kind = EntityKind::Arc;
@@ -85,14 +94,16 @@ namespace macad::sketch {
         return e.id;
     }
 
-    ConstraintId Sketch::addConstraint(const Constraint& c) {
+    ConstraintId Sketch::addConstraint(const Constraint& c) 
+    {
         Constraint copy = c;
         copy.id = ConstraintId{ m_constraints.size() + 1 };
         m_constraints.push_back(copy);
         return copy.id;
     }
 
-    ConstraintId Sketch::addCoincident(PointId a, PointId b) {
+    ConstraintId Sketch::addCoincident(PointId a, PointId b) 
+    {
         if (!valid(a) || !valid(b) || a == b) return {};
         Constraint c;
         c.kind = ConstraintKind::Coincident;
@@ -101,7 +112,8 @@ namespace macad::sketch {
         return addConstraint(c);
     }
 
-    ConstraintId Sketch::addGeometric(ConstraintKind kind, EntityId e0, EntityId e1) {
+    ConstraintId Sketch::addGeometric(ConstraintKind kind, EntityId e0, EntityId e1)
+    {
         if (isDimension(kind) || kind == ConstraintKind::Coincident) return {};
         if (!valid(e0)) return {};
         Constraint c;
@@ -111,7 +123,8 @@ namespace macad::sketch {
         return addConstraint(c);
     }
 
-    ConstraintId Sketch::addDistance(PointId a, PointId b, double value) {
+    ConstraintId Sketch::addDistance(PointId a, PointId b, double value)
+    {
         if (!valid(a) || !valid(b)) return {};
         Constraint c;
         c.kind = ConstraintKind::Distance;
@@ -121,7 +134,8 @@ namespace macad::sketch {
         return addConstraint(c);
     }
 
-    ConstraintId Sketch::addRadius(EntityId circle, double value) {
+    ConstraintId Sketch::addRadius(EntityId circle, double value)
+    {
         if (!valid(circle)) return {};
         Constraint c;
         c.kind = ConstraintKind::Radius;
@@ -130,7 +144,8 @@ namespace macad::sketch {
         return addConstraint(c);
     }
 
-    ConstraintId Sketch::addAngle(EntityId line0, EntityId line1, double value) {
+    ConstraintId Sketch::addAngle(EntityId line0, EntityId line1, double value) 
+    {
         if (!valid(line0) || !valid(line1)) return {};
         Constraint c;
         c.kind = ConstraintKind::Angle;
@@ -140,7 +155,8 @@ namespace macad::sketch {
         return addConstraint(c);
     }
 
-    void Sketch::removeEntity(EntityId id) {
+    void Sketch::removeEntity(EntityId id) 
+    {
         if (!valid(id)) return;
         Entity& e = m_entities[id.value - 1];
         e.removed = true;
@@ -168,47 +184,57 @@ namespace macad::sketch {
         }
     }
 
-    void Sketch::removeConstraint(ConstraintId id) {
-        if (id.value >= 1 && id.value <= m_constraints.size()) {
+    void Sketch::removeConstraint(ConstraintId id) 
+    {
+        if (id.value >= 1 && id.value <= m_constraints.size()) 
+        {
             m_constraints[id.value - 1].removed = true;
         }
     }
 
-    void Sketch::clear() {
+    void Sketch::clear()
+    {
         m_vars.clear();
         m_points.clear();
         m_entities.clear();
         m_constraints.clear();
     }
 
-    vec2 Sketch::pointPos(PointId id) const {
+    vec2 Sketch::pointPos(PointId id) const 
+    {
         const Point& p = m_points[id.value - 1];
         return { static_cast<float>(m_vars[p.vx]), static_cast<float>(m_vars[p.vy]) };
     }
 
-    void Sketch::setPointPos(PointId id, const vec2& v) {
+    void Sketch::setPointPos(PointId id, const vec2& v) 
+    {
         const Point& p = m_points[id.value - 1];
         m_vars[p.vx] = v.x;
         m_vars[p.vy] = v.y;
     }
 
-    void Sketch::setPointFixed(PointId id, bool fixed) {
+    void Sketch::setPointFixed(PointId id, bool fixed)
+    {
         if (valid(id)) m_points[id.value - 1].fixed = fixed;
     }
 
-    double Sketch::radius(EntityId id) const {
+    double Sketch::radius(EntityId id) const 
+    {
         const Entity& e = m_entities[id.value - 1];
         return e.vr >= 0 ? m_vars[e.vr] : 0.0;
     }
 
-    double Sketch::arcStart(EntityId id) const {
+    double Sketch::arcStart(EntityId id) const
+    {
         const Entity& e = m_entities[id.value - 1];
         return e.vStart >= 0 ? m_vars[e.vStart] : 0.0;
     }
 
-    double Sketch::arcEnd(EntityId id) const {
+    double Sketch::arcEnd(EntityId id) const 
+    {
         const Entity& e = m_entities[id.value - 1];
         return e.vEnd >= 0 ? m_vars[e.vEnd] : 0.0;
     }
 
-} // namespace macad::sketch
+}  
+

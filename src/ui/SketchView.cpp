@@ -41,7 +41,8 @@ namespace macad::ui {
 
     // ---- lifecycle ---------------------------------------------------------
 
-    void SketchView::toggle() {
+    void SketchView::toggle() 
+    {
         if (m_active) { end(); return; }
         m_sketch.clear();
         // Anchored origin so the sketch is grounded (removes 2 DOF) and there is a
@@ -55,7 +56,8 @@ namespace macad::ui {
         resolve();
     }
 
-    void SketchView::end() {
+    void SketchView::end()
+    {
         m_active = false;
         m_drawing = false;
         m_clickStage = 0;
@@ -64,7 +66,8 @@ namespace macad::ui {
 
     // ---- projection --------------------------------------------------------
 
-    bool SketchView::worldToScreen(const mat4& vp, const vec3& world, vec2& out) const {
+    bool SketchView::worldToScreen(const mat4& vp, const vec3& world, vec2& out) const
+    {
         const ImVec2 disp = ImGui::GetIO().DisplaySize;
         const vec4 clip = vp * vec4(world, 1.0f);
         if (clip.w <= 1e-6f) return false; // at/behind the camera
@@ -74,7 +77,8 @@ namespace macad::ui {
         return true;
     }
 
-    vec2 SketchView::screenToSketch(const mat4& vp, const vec2& screen) const {
+    vec2 SketchView::screenToSketch(const mat4& vp, const vec2& screen) const 
+    {
         const ImVec2 disp = ImGui::GetIO().DisplaySize;
         const mat4 inv = glm::inverse(vp);
         const float nx = (screen.x / std::max(1.0f, disp.x)) * 2.0f - 1.0f;
@@ -98,7 +102,8 @@ namespace macad::ui {
 
     // ---- picking -----------------------------------------------------------
 
-    PointId SketchView::pickPoint(const mat4& vp, const vec2& mouse, float pixels) const {
+    PointId SketchView::pickPoint(const mat4& vp, const vec2& mouse, float pixels) const
+    {
         PointId best;
         float bestD = pixels;
         const ImVec2 m{ mouse.x, mouse.y };
@@ -112,7 +117,8 @@ namespace macad::ui {
         return best;
     }
 
-    EntityId SketchView::pickEntity(const mat4& vp, const vec2& mouse, float pixels) const {
+    EntityId SketchView::pickEntity(const mat4& vp, const vec2& mouse, float pixels) const
+    {
         EntityId best;
         float bestD = pixels;
         const ImVec2 m{ mouse.x, mouse.y };
@@ -504,6 +510,15 @@ namespace macad::ui {
             ImGui::EndDisabled();
             ImGui::SameLine();
             if (ImGui::Button("Exit Sketch")) end();
+
+            ImGui::Separator();
+            ImGui::SetNextItemWidth(70.0f);
+            ImGui::InputDouble("Height##extrude", &m_extrudeHeight, 0.0, 0.0, "%.2f");
+            ImGui::SameLine();
+            if (ImGui::Button("Extrude")) {
+                m_pendingExtrude = true;
+                end(); // leave sketch mode; Application will pick this up
+            }
 
             ImGui::Separator();
             // ---- constraint status (under/over) -------------------------------

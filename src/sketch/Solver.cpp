@@ -5,15 +5,16 @@
 #include <utility>
 #include <vector>
 
-namespace macad::sketch {
+namespace macad::sketch
+{ 
+    namespace 
+    {
 
-    namespace {
-
-        // ---- small dense linear algebra (n is the free-variable count, small) --
-
+        // ---- small dense linear algebra (n is the free-variable count, small) -- 
         // Solves A x = b in place via Gauss-Newton with partial pivoting.
         // A is row-major n*n, b is n. Returns false if singular.
-        bool solveDense(std::vector<double>& A, std::vector<double>& b, int n) {
+        bool solveDense(std::vector<double>& A, std::vector<double>& b, int n) 
+        {
             for (int col = 0; col < n; ++col) {
                 int pivot = col;
                 double best = std::abs(A[col * n + col]);
@@ -44,28 +45,33 @@ namespace macad::sketch {
         // Read coordinates in double precision straight from the variable array.
         // (Sketch::pointPos truncates to float, which would swallow the ~1e-7
         // finite-difference perturbation and zero out the Jacobian.)
-        glm::dvec2 pos(const Sketch& s, PointId id) {
+        glm::dvec2 pos(const Sketch& s, PointId id) 
+        {
             const Point& p = s.point(id);
             return { s.var(p.vx), s.var(p.vy) };
         }
 
         // Direction (a, b) of a line entity as double-precision endpoints.
-        void lineEnds(const Sketch& s, EntityId id, glm::dvec2& a, glm::dvec2& b) {
+        void lineEnds(const Sketch& s, EntityId id, glm::dvec2& a, glm::dvec2& b) 
+        {
             const Entity& e = s.entity(id);
             a = pos(s, e.p0);
             b = pos(s, e.p1);
         }
 
-        double cross2(const glm::dvec2& u, const glm::dvec2& v) {
+        double cross2(const glm::dvec2& u, const glm::dvec2& v) 
+        {
             return u.x * v.y - u.y * v.x;
         }
 
-        glm::dvec2 normalizeSafe(const glm::dvec2& v) {
+        glm::dvec2 normalizeSafe(const glm::dvec2& v) 
+        {
             const double len = std::sqrt(v.x * v.x + v.y * v.y);
             return len > 1e-12 ? glm::dvec2{ v.x / len, v.y / len } : glm::dvec2{ 1.0, 0.0 };
         }
 
-        void appendResiduals(const Sketch& s, const Constraint& c, std::vector<double>& out) {
+        void appendResiduals(const Sketch& s, const Constraint& c, std::vector<double>& out) 
+        {
             switch (c.kind) {
             case ConstraintKind::Coincident: {
                 const auto a = pos(s, c.p0), b = pos(s, c.p1);
@@ -155,7 +161,8 @@ namespace macad::sketch {
             }
         }
 
-        std::vector<double> evalResiduals(const Sketch& s) {
+        std::vector<double> evalResiduals(const Sketch& s)
+        {
             std::vector<double> r;
             for (const Constraint& c : s.constraints()) {
                 if (c.removed) continue;
@@ -164,7 +171,8 @@ namespace macad::sketch {
             return r;
         }
 
-        double norm2(const std::vector<double>& v) {
+        double norm2(const std::vector<double>& v) 
+        {
             double s = 0.0;
             for (double x : v) s += x * x;
             return s;
@@ -172,7 +180,8 @@ namespace macad::sketch {
 
     } // namespace
 
-    SolveResult Solver::solve(Sketch& sketch, int maxIterations, double tolerance) {
+    SolveResult Solver::solve(Sketch& sketch, int maxIterations, double tolerance)
+    {
         SolveResult result;
 
         // Collect free variable slots: coords of unfixed, live points + every
@@ -287,6 +296,7 @@ namespace macad::sketch {
         result.converged = result.residualNorm < std::sqrt(tolerance) * 10.0;
         result.overConstrained = (m > n) || !result.converged;
         return result;
-    }
+    } 
 
-} // namespace macad::sketch
+}  
+

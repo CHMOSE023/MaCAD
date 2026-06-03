@@ -114,7 +114,12 @@ namespace macad::render {
         }
         bgfx::setTransform(glm::value_ptr(model));
         mesh.setBuffers();
-        bgfx::setState(BGFX_STATE_DEFAULT);
+        // BGFX_STATE_DEFAULT includes BGFX_STATE_CULL_CW which discards back
+        // faces. In a CAD viewport we need both sides visible (thin surfaces,
+        // inspection from any angle), so culling is off.
+        bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
+                       BGFX_STATE_WRITE_Z   | BGFX_STATE_DEPTH_TEST_LESS |
+                       BGFX_STATE_MSAA);
         bgfx::submit(kMainView, bgfx::ProgramHandle{ m_program });
     }
 

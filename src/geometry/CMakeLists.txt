@@ -1,7 +1,8 @@
 add_library(macad_geometry STATIC
     Shape.cpp
     Primitives.cpp
-    Tessellator.cpp)
+    Tessellator.cpp
+    SketchToShape.cpp)
 
 target_sources(macad_geometry PUBLIC
     FILE_SET HEADERS
@@ -9,13 +10,14 @@ target_sources(macad_geometry PUBLIC
     FILES
         Shape.hpp
         Primitives.hpp
-        Tessellator.hpp)
+        Tessellator.hpp
+        SketchToShape.hpp)
 
 target_include_directories(macad_geometry PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # geometry is the ONLY layer allowed to link OCCT.
 target_link_libraries(macad_geometry
-    PUBLIC  macad::core
+    PUBLIC  macad::core macad::sketch
     PRIVATE macad::occt)
 
 set_target_properties(macad_geometry PROPERTIES FOLDER "macad")

@@ -20,7 +20,8 @@ namespace macad {
     // Strongly typed id wrapper to avoid mixing different id spaces (e.g. a
     // FeatureId passed where a ParameterId is expected). Tag is a phantom type.
     template <typename Tag>
-    struct StrongId {
+    struct StrongId 
+    {
         std::uint64_t value{ 0 };
 
         constexpr StrongId() = default;
@@ -33,7 +34,8 @@ namespace macad {
     // Minimal Result type for fallible operations without exceptions at API
     // boundaries. E defaults to std::string for human-readable errors.
     template <typename T, typename E = std::string>
-    class Result {
+    class Result 
+    {
     public:
         Result(T value) : m_data(std::move(value)) {}
         static Result error(E e) { return Result(std::move(e), true); }

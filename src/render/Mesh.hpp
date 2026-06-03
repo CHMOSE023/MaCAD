@@ -9,18 +9,19 @@
 
 namespace macad::render {
 
-    class Mesh {
+    class Mesh 
+    {
     public:
         Mesh() = default;
         ~Mesh();
 
-        Mesh(const Mesh&) = delete;
+        Mesh(const Mesh&)            = delete;
         Mesh& operator=(const Mesh&) = delete;
 
         // Replaces any existing GPU buffers with data from `mesh`.
-        void upload(const MeshData& mesh);
+        void upload(const MeshData& mesh); 
 
-        bool valid() const { return m_valid; }
+        bool valid()               const { return m_valid; }
         std::uint32_t indexCount() const { return m_indexCount; }
 
         // Binds the buffers to the current bgfx draw call (does not submit).

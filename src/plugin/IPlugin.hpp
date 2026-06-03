@@ -32,4 +32,5 @@ namespace macad {
     // The loader (M6) will resolve "macadCreatePlugin", call it, and own the
     // returned instance. Kept here so the contract is visible from the start.
 
-} // namespace macad
+}  
+

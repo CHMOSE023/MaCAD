@@ -8,11 +8,12 @@
 
 #include "sketch/Sketch.hpp"
 
-namespace macad::sketch {
-
-    struct SolveResult {
-        bool converged{ false };
-        int iterations{ 0 };
+namespace macad::sketch 
+{ 
+    struct SolveResult 
+    {
+        bool   converged{ false };
+        int    iterations{ 0 };
         double residualNorm{ 0.0 };
 
         // Degree-of-freedom hint: freeVars - residualEquations. >0 under-constrained,
@@ -24,11 +25,12 @@ namespace macad::sketch {
         bool overConstrained{ false };
     };
 
-    class Solver {
+    class Solver 
+    {
     public:
         // Solves in place, updating the sketch's variables. Fixed points are held.
-        static SolveResult solve(Sketch& sketch, int maxIterations = 100,
-            double tolerance = 1e-9);
+        static SolveResult solve(Sketch& sketch, int maxIterations = 100, double tolerance = 1e-9);
     };
 
-} // namespace macad::sketch
+} 
+

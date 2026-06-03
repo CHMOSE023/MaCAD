@@ -17,18 +17,21 @@
 #include <string>
 #include <vector>
 
-namespace macad::sketch {
+namespace macad::sketch
+{
 
-    struct PointTag {};
-    struct EntityTag {};
+    struct PointTag      {};
+    struct EntityTag     {};
     struct ConstraintTag {};
-    using PointId = StrongId<PointTag>;
-    using EntityId = StrongId<EntityTag>;
-    using ConstraintId = StrongId<ConstraintTag>;
+
+    using  PointId       = StrongId<PointTag>;
+    using  EntityId      = StrongId<EntityTag>;
+    using  ConstraintId  = StrongId<ConstraintTag>;
 
     enum class EntityKind { Point, Line, Circle, Arc };
 
-    enum class ConstraintKind {
+    enum class ConstraintKind
+    {
         // Geometric (no value).
         Coincident,   // point == point
         Horizontal,   // line is horizontal
@@ -45,7 +48,8 @@ namespace macad::sketch {
     bool isDimension(ConstraintKind k);
     const char* constraintName(ConstraintKind k);
 
-    struct Point {
+    struct Point
+    {
         PointId id;
         int vx{ -1 };       // index into Sketch::m_vars
         int vy{ -1 };
@@ -53,29 +57,32 @@ namespace macad::sketch {
         bool removed{ false };
     };
 
-    struct Entity {
-        EntityId id;
+    struct Entity 
+    {
+        EntityId   id;
         EntityKind kind{ EntityKind::Point };
-        PointId p0;          // point / line-start / circle-center / arc-center
-        PointId p1;          // line-end (Line only)
-        int vr{ -1 };        // radius var (Circle, Arc)
-        int vStart{ -1 };    // arc start angle var (radians)
-        int vEnd{ -1 };      // arc end angle var (radians)
-        bool removed{ false };
+        PointId    p0;                    // point / line-start / circle-center / arc-center
+        PointId    p1;                    // line-end (Line only)
+        int        vr     { -1 };         // radius var (Circle, Arc)
+        int        vStart { -1 };         // arc start angle var (radians)
+        int        vEnd   { -1 };         // arc end angle var (radians)
+        bool       removed{ false };
     };
 
-    struct Constraint {
-        ConstraintId id;
+    struct Constraint
+    {
+        ConstraintId   id;
         ConstraintKind kind{ ConstraintKind::Coincident };
-        EntityId e0;
-        EntityId e1;
-        PointId p0;
-        PointId p1;
-        double value{ 0.0 };  // dimensional target
-        bool removed{ false };
+        EntityId       e0;
+        EntityId       e1;
+        PointId        p0;
+        PointId        p1;
+        double         value{ 0.0 };  // dimensional target
+        bool           removed{ false };
     };
 
-    class Sketch {
+    class Sketch
+    {
     public:
         Sketch() = default;
 
@@ -83,7 +90,7 @@ namespace macad::sketch {
         void setPlane(const SketchPlane& p) { m_plane = p; }
 
         // ---- construction --------------------------------------------------
-        PointId addPoint(double x, double y, bool fixed = false);
+        PointId  addPoint(double x, double y, bool fixed = false);
         EntityId addPointEntity(double x, double y);
         EntityId addLine(double x0, double y0, double x1, double y1);
         EntityId addLineFromPoints(PointId a, PointId b);
@@ -103,23 +110,23 @@ namespace macad::sketch {
         void clear();
 
         // ---- access --------------------------------------------------------
-        const std::vector<Point>& points() const { return m_points; }
-        const std::vector<Entity>& entities() const { return m_entities; }
+        const std::vector<Point>&      points()      const { return m_points; }
+        const std::vector<Entity>&     entities()    const { return m_entities; }
         const std::vector<Constraint>& constraints() const { return m_constraints; }
-        std::vector<Constraint>& constraints() { return m_constraints; }
+        std::vector<Constraint>&       constraints()       { return m_constraints; }
 
-        const Point& point(PointId id) const { return m_points[id.value - 1]; }
+        const Point& point(PointId id)    const { return m_points[id.value - 1]; }
         const Entity& entity(EntityId id) const { return m_entities[id.value - 1]; }
-        bool valid(PointId id) const { return id.value >= 1 && id.value <= m_points.size(); }
-        bool valid(EntityId id) const { return id.value >= 1 && id.value <= m_entities.size(); }
+        bool valid(PointId id)            const { return id.value >= 1 && id.value <= m_points.size(); }
+        bool valid(EntityId id)           const { return id.value >= 1 && id.value <= m_entities.size(); }
 
         vec2 pointPos(PointId id) const;
         void setPointPos(PointId id, const vec2& p);
         void setPointFixed(PointId id, bool fixed);
 
-        double radius(EntityId id) const;
+        double radius  (EntityId id) const;
         double arcStart(EntityId id) const;
-        double arcEnd(EntityId id) const;
+        double arcEnd  (EntityId id) const;
 
         // ---- raw variable array (for the solver) ---------------------------
         std::size_t varCount() const { return m_vars.size(); }
@@ -129,11 +136,11 @@ namespace macad::sketch {
     private:
         int addVar(double v);
 
-        SketchPlane m_plane;                 // world XY by default
-        std::vector<double> m_vars;          // flat DOF array
-        std::vector<Point> m_points;
-        std::vector<Entity> m_entities;
+        SketchPlane m_plane;                     // world XY by default
+        std::vector<double>     m_vars;          // flat DOF array
+        std::vector<Point>      m_points;
+        std::vector<Entity>     m_entities;
         std::vector<Constraint> m_constraints;
     };
 
-} // namespace macad::sketch
+} 
